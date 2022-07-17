@@ -244,11 +244,16 @@ app.post("/travelEmission", (request, response) => {
         headers: {
           Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
         }
-      }).then(async function (response) {
-        travelEmission.calculation = response.data;
+      }).then(async function (res) {
+        travelEmission.calculation = res.data;
         // save the new travel emission
+        var id = "";
         await travelEmission.save().then((addedEmission) => {
-          console.log(addedEmission);
+          id = addedEmission._id;
+        });
+        response.status(201).send({
+          message: "Travel Emission added successfully",
+          _id: id
         });
       }).catch(function (error) {
         console.log(error);
@@ -259,10 +264,6 @@ app.post("/travelEmission", (request, response) => {
         e,
       });
     });
-
-  response.status(201).send({
-    message: "Travel Emission added successfully"
-  });
 });
 
 app.put("/travelEmission", (request, response) => {
