@@ -333,13 +333,19 @@ app.get("/travelEmissions", (request, response) => {
 });
 
 app.get("/travelCalculations", async (request, response) => {
-  const result = { "Road": 0, "Air": 0, "Sea": 0, "Rail": 0 };
+  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const result = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
+  const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0 };
   await TravelEmission.find()
     // if travel emissions exists
     .then((emissions) => {
+      var total = 0;
       emissions.forEach((emission) => {
-        result[emission.travelBy] += parseFloat(emission.calculation.co2e);
+        const date = new Date(emission.date);
+        result[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
+        total += parseFloat(emission.calculation.co2e);
       });
+      final["total"] = total;
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -348,7 +354,14 @@ app.get("/travelCalculations", async (request, response) => {
         e,
       });
     });
-  response.status(200).send(result);
+
+  Object.keys(result).forEach((key) => {
+    final[key] = [];
+    Object.keys(result[key]).forEach((month) => {
+      final[key].push({ "month": month, "emission": result[key][month] });
+    });
+  });
+  response.status(200).send(final);
 });
 
 module.exports = app;
