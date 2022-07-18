@@ -580,23 +580,22 @@ app.post("/electricityEmission", (request, response) => {
 });
 
 app.put("/electricityEmission", (request, response) => {
-  ClimatiqFactors.find({ category: "Cargo" })
+  ClimatiqFactors.find({ category: "Electricity" })
     .then(async (climatiqFactors) => {
       var factors = {};
       climatiqFactors.forEach((factor) => {
         factors[factor.type] = factor;
       })
-      const electricityEmission = new CargoEmission(request.body);
+      const electricityEmission = new ElectricityEmission(request.body);
       await axios({
         method: 'POST',
         url: 'https://beta3.api.climatiq.io/estimate',
         data: JSON.stringify({
-          "emission_factor": factors[electricityEmission.travelBy]["factors"][electricityEmission.factorType]["factor"],
+          "emission_factor": {
+            "activity_id": factors["All"]["factors"][electricityEmission.factorType]["factor"],
+          },
           "parameters": {
-            "distance": electricityEmission.distance,
-            "distance_unit": "km",
-            "weight": electricityEmission.weight,
-            "weight_unit": "kg"
+            "energy": electricityEmission.energy,
           }
         }),
         headers: {
@@ -604,7 +603,7 @@ app.put("/electricityEmission", (request, response) => {
         }
       }).then(async function (response) {
         electricityEmission.calculation = response.data;
-        await CargoEmission.updateOne({ _id: electricityEmission._id }, electricityEmission);
+        await ElectricityEmission.updateOne({ _id: electricityEmission._id }, electricityEmission);
       }).catch(function (error) {
         console.log(error);
       });
@@ -615,14 +614,14 @@ app.put("/electricityEmission", (request, response) => {
       });
     });
   response.status(200).send({
-    message: "Cargo Emission updated successfully"
+    message: "Electricity Emission updated successfully"
   });
 });
 
 app.delete("/electricityEmission", async (request, response) => {
-  await CargoEmission.deleteOne({ _id: request.body._id });
+  await ElectricityEmission.deleteOne({ _id: request.body._id });
   response.status(200).send({
-    message: "Cargo Emission deleted successfully"
+    message: "Electricity Emission deleted successfully"
   });
 });
 
