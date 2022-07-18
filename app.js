@@ -10,6 +10,7 @@ const dbConnect = require("./db/dbConnect");
 const User = require("./db/userModel");
 const ClimatiqFactors = require("./db/climatiqFactorModel");
 const TravelEmission = require("./db/travelEmissionModel");
+const CargoEmission = require("./db/cargoEmissionModel");
 const auth = require("./auth");
 
 // execute database connection
@@ -146,30 +147,36 @@ app.get("/auth-endpoint", auth, (request, response) => {
 // getFactors endpoint
 app.get("/travelFactors", (request, response) => {
 
-  // const climatiqFactor = new ClimatiqFactors({
-  //   type: request.body.type,
-  //   factors: { "1": { "name": "Automobile" } },
-  // });
-
-  // // save the new climatiqFactor
-  // climatiqFactor
-  //   .save()
-  //   // return success if the new climatiqFactor is added to the database successfully
-  //   .then((result) => {
-  //     response.status(201).send({
-  //       message: "Climatiq factor Created Successfully",
-  //       result,
-  //     });
-  //   })
-  //   // catch erroe if the new climatiqFactor wasn't added successfully to the database
-  //   .catch((error) => {
-  //     response.status(500).send({
-  //       message: "Error creating Climatiq Factor",
-  //       error,
-  //     });
-  //   });
-
   ClimatiqFactors.findOne({ type: request.body.type, category: "Travel" })
+
+    // if email exists
+    .then((climatiq) => {
+      // compare the password entered and the hashed password found
+      var factors = {};
+      const keys = Object.keys(climatiq.factors);
+      keys.forEach((key) => {
+        if (request.body.getName) {
+          factors[key] = climatiq.factors[key].name;
+        } else {
+          factors[key] = climatiq.factors[key].factor;
+        }
+      });
+      //   return success response
+      response.status(200).send(factors);
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+});
+
+// getFactors endpoint
+app.get("/cargoFactors", (request, response) => {
+
+  ClimatiqFactors.findOne({ type: request.body.type, category: "Cargo" })
 
     // if email exists
     .then((climatiq) => {
@@ -199,6 +206,33 @@ app.get("/travelFactors", (request, response) => {
 app.get("/allTravelFactors", (request, response) => {
 
   ClimatiqFactors.find({ category: "Travel" })
+    // if travel emissions exists
+    .then((factors) => {
+      var allFactors = {};
+      factors.forEach((climatiq) => {
+        var factors = [];
+        const keys = Object.keys(climatiq.factors);
+        keys.forEach((key) => {
+          factors.push({ "id": key, "factor": climatiq.factors[key].name });
+        });
+        allFactors[climatiq.type] = factors;
+      });
+      response.status(200).send(allFactors);
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+
+});
+
+// getFactors endpoint
+app.get("/allCargoFactors", (request, response) => {
+
+  ClimatiqFactors.find({ category: "Cargo" })
     // if travel emissions exists
     .then((factors) => {
       var allFactors = {};
@@ -322,6 +356,118 @@ app.get("/travelEmissions", (request, response) => {
         travelEmissions.push(travelEmission);
       });
       response.status(200).send(travelEmissions);
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+});
+
+app.post("/cargoEmission", (request, response) => {
+  ClimatiqFactors.find({ category: "Cargo" })
+    .then(async (climatiqFactors) => {
+      var factors = {};
+      climatiqFactors.forEach((factor) => {
+        factors[factor.type] = factor;
+      })
+      const cargoEmission = new CargoEmission(request.body);
+      await axios({
+        method: 'POST',
+        url: 'https://beta3.api.climatiq.io/estimate',
+        data: JSON.stringify({
+          "emission_factor": factors[cargoEmission.travelBy]["factors"][cargoEmission.factorType]["factor"],
+          "parameters": {
+            "distance": cargoEmission.distance,
+            "distance_unit": "km",
+            "weight": cargoEmission.weight,
+            "weight_unit": "kg"
+          }
+        }),
+        headers: {
+          Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
+        }
+      }).then(async function (res) {
+        cargoEmission.calculation = res.data;
+        // save the new emission
+        var id = "";
+        await cargoEmission.save().then((addedEmission) => {
+          id = addedEmission._id;
+        });
+        response.status(201).send({
+          message: "Cargo Emission added successfully",
+          _id: id
+        });
+      }).catch(function (error) {
+        console.log(error);
+      });
+    }).catch((e) => {
+      response.status(404).send({
+        message: "Factors not found",
+        e: e.message,
+      });
+    });
+});
+
+app.put("/cargoEmission", (request, response) => {
+  ClimatiqFactors.find({ category: "Cargo" })
+    .then(async (climatiqFactors) => {
+      var factors = {};
+      climatiqFactors.forEach((factor) => {
+        factors[factor.type] = factor;
+      })
+      const cargoEmission = new CargoEmission(request.body);
+      await axios({
+        method: 'POST',
+        url: 'https://beta3.api.climatiq.io/estimate',
+        data: JSON.stringify({
+          "emission_factor": factors[cargoEmission.travelBy]["factors"][cargoEmission.factorType]["factor"],
+          "parameters": {
+            "distance": cargoEmission.distance,
+            "distance_unit": "km",
+            "weight": cargoEmission.weight,
+            "weight_unit": "kg"
+          }
+        }),
+        headers: {
+          Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
+        }
+      }).then(async function (response) {
+        cargoEmission.calculation = response.data;
+        await CargoEmission.updateOne({ _id: cargoEmission._id }, cargoEmission);
+      }).catch(function (error) {
+        console.log(error);
+      });
+    }).catch((e) => {
+      response.status(404).send({
+        message: "Factors not found",
+        e,
+      });
+    });
+  response.status(200).send({
+    message: "Cargo Emission updated successfully"
+  });
+});
+
+app.delete("/cargoEmission", async (request, response) => {
+  await CargoEmission.deleteOne({ _id: request.body._id });
+  response.status(200).send({
+    message: "Cargo Emission deleted successfully"
+  });
+});
+
+app.get("/cargoEmissions", (request, response) => {
+  CargoEmission.find()
+    // if travel emissions exists
+    .then((emissions) => {
+      var cargoEmissions = [];
+      emissions.forEach((emission) => {
+        const travelEmission = CargoEmission(emission);
+        cargoEmissions.push(travelEmission);
+      });
+      response.status(200).send(cargoEmissions);
     })
     // catch error if email does not exist
     .catch((e) => {
