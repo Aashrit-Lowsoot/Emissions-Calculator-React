@@ -650,19 +650,19 @@ app.get("/visualisation", async (request, response) => {
   const travelResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
   const cargoResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
   const electricityResult = { "Electricity": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, };
-  const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0 };
+  const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0,  "totalElectricityScope": 0,};
   var total = 0;
   await TravelEmission.find()
     // if travel emissions exists
     .then((emissions) => {
-      var scope3 = 0;
+      var totalTravel = 0;
       emissions.forEach((emission) => {
         const date = new Date(emission.date);
         travelResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
         total += parseFloat(emission.calculation.co2e);
-        scope3 += parseFloat(emission.calculation.co2e);
+        totalTravel += parseFloat(emission.calculation.co2e);
       });
-      final["scope3"] = scope3;
+      final["totalTravelScope"] = totalTravel;
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -675,14 +675,14 @@ app.get("/visualisation", async (request, response) => {
   await CargoEmission.find()
     // if travel emissions exists
     .then((emissions) => {
-      var scope2 = 0;
+      var totalCargo = 0;
       emissions.forEach((emission) => {
         const date = new Date(emission.date);
         cargoResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
         total += parseFloat(emission.calculation.co2e);
-        scope2 += parseFloat(emission.calculation.co2e);
+        totalCargo += parseFloat(emission.calculation.co2e);
       });
-      final["scope2"] = scope2;
+      final["totalCargoScope"] = totalCargo;
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -692,17 +692,17 @@ app.get("/visualisation", async (request, response) => {
       });
     });
 
-    await ElectricityEmission.find()
+  await ElectricityEmission.find()
     // if travel emissions exists
     .then((emissions) => {
-      var scope1 = 0;
+      var totalElectricity = 0;
       emissions.forEach((emission) => {
         const date = new Date(emission.date);
         electricityResult["Electricity"][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
         total += parseFloat(emission.calculation.co2e);
-        scope1 += parseFloat(emission.calculation.co2e);
+        totalElectricity += parseFloat(emission.calculation.co2e);
       });
-      final["scope1"] = scope1;
+      final["totalElectricityScope"] = totalElectricity;
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -713,6 +713,8 @@ app.get("/visualisation", async (request, response) => {
     });
 
   final["total"] = total;
+  final["scope2"] = final["totalElectricityScope"];
+  final["scope3"] = final["totalTravelScope"] + final["totalCargoScope"];
 
   final["Travel"] = {};
   Object.keys(travelResult).forEach((key) => {
