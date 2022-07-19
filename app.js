@@ -649,6 +649,7 @@ app.get("/visualisation", async (request, response) => {
   const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const travelResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
   const cargoResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
+  const electricityResult = { "Electricity": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, };
   const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0 };
   var total = 0;
   await TravelEmission.find()
@@ -691,11 +692,30 @@ app.get("/visualisation", async (request, response) => {
       });
     });
 
+    await ElectricityEmission.find()
+    // if travel emissions exists
+    .then((emissions) => {
+      var scope1 = 0;
+      emissions.forEach((emission) => {
+        const date = new Date(emission.date);
+        electricityResult["Electricity"][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
+        total += parseFloat(emission.calculation.co2e);
+        scope1 += parseFloat(emission.calculation.co2e);
+      });
+      final["scope1"] = scope1;
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+
   final["total"] = total;
 
   final["Travel"] = {};
   Object.keys(travelResult).forEach((key) => {
-
     final["Travel"][key] = [];
     Object.keys(travelResult[key]).forEach((month) => {
       final["Travel"][key].push({ "month": month, "emission": travelResult[key][month] });
@@ -707,6 +727,14 @@ app.get("/visualisation", async (request, response) => {
     final["Cargo"][key] = [];
     Object.keys(cargoResult[key]).forEach((month) => {
       final["Cargo"][key].push({ "month": month, "emission": cargoResult[key][month] });
+    });
+  });
+
+  final["Electricity"] = {};
+  Object.keys(electricityResult).forEach((key) => {
+    final["Electricity"][key] = [];
+    Object.keys(electricityResult[key]).forEach((month) => {
+      final["Electricity"][key].push({ "month": month, "emission": electricityResult[key][month] });
     });
   });
   response.status(200).send(final);
