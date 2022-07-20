@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
-const CargoEmissionSchema = new mongoose.Schema({
-    weight: {
+const GSTravelEmissionSchema = new mongoose.Schema({
+    passengers: {
         type: Number,
         default: 1
     },
@@ -33,8 +33,8 @@ const CargoEmissionSchema = new mongoose.Schema({
 
     fromSheets: {
         type: Boolean,
-        default: false,
+        default: true,
     },
 });
 
-module.exports = mongoose.model.CargoEmission || mongoose.model("CargoEmission", CargoEmissionSchema);
+module.exports = mongoose.model.GSTravelEmission || mongoose.model("GSTravelEmission", GSTravelEmissionSchema);

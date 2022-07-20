@@ -1,19 +1,9 @@
 const mongoose = require("mongoose");
 
-const CargoEmissionSchema = new mongoose.Schema({
-    weight: {
+const GSElectricityEmissionModel = new mongoose.Schema({
+    energy: {
         type: Number,
         default: 1
-    },
-
-    distance: {
-        type: Number,
-        required: [true, "Please provide the dstance!"],
-    },
-
-    travelBy: {
-        type: String,
-        required: [true, "Please provide the travel by!"],
     },
 
     factorType: {
@@ -33,8 +23,8 @@ const CargoEmissionSchema = new mongoose.Schema({
 
     fromSheets: {
         type: Boolean,
-        default: false,
+        default: true,
     },
 });
 
-module.exports = mongoose.model.CargoEmission || mongoose.model("CargoEmission", CargoEmissionSchema);
+module.exports = mongoose.model.GSElectricityEmission || mongoose.model("GSElectricityEmission", GSElectricityEmissionModel);

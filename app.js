@@ -10,9 +10,19 @@ const dbConnect = require("./db/dbConnect");
 const User = require("./db/userModel");
 const ClimatiqFactors = require("./db/climatiqFactorModel");
 const TravelEmission = require("./db/travelEmissionModel");
+const GSTravelEmission = require("./db/gsTravelEmissionModel");
 const CargoEmission = require("./db/cargoEmissionModel");
+const GSCargoEmission = require("./db/gsCargoEmissionModel");
 const ElectricityEmission = require("./db/electricityEmissionModel");
+const GSElectricityEmission = require("./db/gsElectricityEmissionModel");
 const auth = require("./auth");
+const { google } = require('googleapis');
+var admin = require('firebase-admin');
+
+const serviceAccount = require("./keys/lowsoot-3d8ff-firebase-adminsdk-xtk5p-f90790ef2a.json");
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 // execute database connection
 dbConnect();
@@ -313,7 +323,7 @@ app.get("/allElectricityFactors", (request, response) => {
 
 });
 
-app.post("/travelEmission", (request, response) => {
+app.post("/travelEmission", async (request, response) => {
   ClimatiqFactors.find({ category: "Travel" })
     .then(async (climatiqFactors) => {
       var factors = {};
@@ -321,6 +331,7 @@ app.post("/travelEmission", (request, response) => {
         factors[factor.type] = factor;
       })
       const travelEmission = new TravelEmission(request.body);
+      travelEmission.fromSheets = false;
       await axios({
         method: 'POST',
         url: 'https://beta3.api.climatiq.io/estimate',
@@ -403,16 +414,21 @@ app.delete("/travelEmission", async (request, response) => {
   });
 });
 
-app.get("/travelEmissions", (request, response) => {
-  TravelEmission.find()
+app.get("/travelEmissions", async (request, response) => {
+  await GSTravelEmission.deleteMany({});
+  await travelEmissionfromSheets("Travel!B5:E", "Road");
+  await travelEmissionfromSheets("Travel!G5:J", "Air");
+  await new Promise(r => setTimeout(r, 500));
+  var travelEmissions = [];
+  await TravelEmission.find()
     // if travel emissions exists
     .then((emissions) => {
-      var travelEmissions = [];
+
       emissions.forEach((emission) => {
         const travelEmission = TravelEmission(emission);
         travelEmissions.push(travelEmission);
       });
-      response.status(200).send(travelEmissions);
+
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -421,6 +437,24 @@ app.get("/travelEmissions", (request, response) => {
         e,
       });
     });
+  await GSTravelEmission.find()
+    // if travel emissions exists
+    .then((emissions) => {
+
+      emissions.forEach((emission) => {
+        const travelEmission = GSTravelEmission(emission);
+        travelEmissions.push(travelEmission);
+      });
+
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+  response.status(200).send(travelEmissions);
 });
 
 app.post("/cargoEmission", (request, response) => {
@@ -515,16 +549,20 @@ app.delete("/cargoEmission", async (request, response) => {
   });
 });
 
-app.get("/cargoEmissions", (request, response) => {
-  CargoEmission.find()
+app.get("/cargoEmissions", async (request, response) => {
+  await GSCargoEmission.deleteMany({});
+  await cargoEmissionfromSheets("Cargo!B5:E", "Road");
+  await cargoEmissionfromSheets("Cargo!G5:J", "Air");
+  await new Promise(r => setTimeout(r, 500));
+  var cargoEmissions = [];
+  await CargoEmission.find()
     // if travel emissions exists
     .then((emissions) => {
-      var cargoEmissions = [];
       emissions.forEach((emission) => {
         const travelEmission = CargoEmission(emission);
         cargoEmissions.push(travelEmission);
       });
-      response.status(200).send(cargoEmissions);
+
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -533,6 +571,23 @@ app.get("/cargoEmissions", (request, response) => {
         e,
       });
     });
+  await GSCargoEmission.find()
+    // if travel emissions exists
+    .then((emissions) => {
+      emissions.forEach((emission) => {
+        const travelEmission = CargoEmission(emission);
+        cargoEmissions.push(travelEmission);
+      });
+
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+  response.status(200).send(cargoEmissions);
 });
 
 app.post("/electricityEmission", (request, response) => {
@@ -625,16 +680,20 @@ app.delete("/electricityEmission", async (request, response) => {
   });
 });
 
-app.get("/electricityEmissions", (request, response) => {
-  ElectricityEmission.find()
+app.get("/electricityEmissions", async (request, response) => {
+  await GSElectricityEmission.deleteMany({});
+  await electricityEmissionfromSheets("Electricity!B5:D", "All");
+  await new Promise(r => setTimeout(r, 500));
+  var electricityEmissions = [];
+  await ElectricityEmission.find()
     // if travel emissions exists
     .then((emissions) => {
-      var cargoEmissions = [];
+
       emissions.forEach((emission) => {
-        const travelEmission = ElectricityEmission(emission);
-        cargoEmissions.push(travelEmission);
+        const electricityEmission = ElectricityEmission(emission);
+        electricityEmissions.push(electricityEmission);
       });
-      response.status(200).send(cargoEmissions);
+
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -643,6 +702,25 @@ app.get("/electricityEmissions", (request, response) => {
         e,
       });
     });
+
+  await GSElectricityEmission.find()
+    // if travel emissions exists
+    .then((emissions) => {
+
+      emissions.forEach((emission) => {
+        const electricityEmission = ElectricityEmission(emission);
+        electricityEmissions.push(electricityEmission);
+      });
+
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+  response.status(200).send(electricityEmissions);
 });
 
 app.get("/visualisation", async (request, response) => {
@@ -650,19 +728,21 @@ app.get("/visualisation", async (request, response) => {
   const travelResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
   const cargoResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
   const electricityResult = { "Electricity": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, };
-  const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0,  "totalElectricityScope": 0,};
+  const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0, "totalElectricityScope": 0, };
   var total = 0;
+  var totalTravel = 0;
+  var totalCargo = 0;
+  var totalElectricity = 0;
+
   await TravelEmission.find()
     // if travel emissions exists
     .then((emissions) => {
-      var totalTravel = 0;
       emissions.forEach((emission) => {
         const date = new Date(emission.date);
         travelResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
         total += parseFloat(emission.calculation.co2e);
         totalTravel += parseFloat(emission.calculation.co2e);
       });
-      final["totalTravelScope"] = totalTravel;
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -672,17 +752,37 @@ app.get("/visualisation", async (request, response) => {
       });
     });
 
+  await GSTravelEmission.find()
+    // if travel emissions exists
+    .then((emissions) => {
+      emissions.forEach((emission) => {
+        const date = new Date(emission.date);
+        travelResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
+        total += parseFloat(emission.calculation.co2e);
+        totalTravel += parseFloat(emission.calculation.co2e);
+      });
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+
+  final["totalTravelScope"] = totalTravel;
+
   await CargoEmission.find()
     // if travel emissions exists
     .then((emissions) => {
-      var totalCargo = 0;
+
       emissions.forEach((emission) => {
         const date = new Date(emission.date);
         cargoResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
         total += parseFloat(emission.calculation.co2e);
         totalCargo += parseFloat(emission.calculation.co2e);
       });
-      final["totalCargoScope"] = totalCargo;
+
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -692,17 +792,17 @@ app.get("/visualisation", async (request, response) => {
       });
     });
 
-  await ElectricityEmission.find()
+  await GSCargoEmission.find()
     // if travel emissions exists
     .then((emissions) => {
-      var totalElectricity = 0;
+
       emissions.forEach((emission) => {
         const date = new Date(emission.date);
-        electricityResult["Electricity"][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
+        cargoResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
         total += parseFloat(emission.calculation.co2e);
-        totalElectricity += parseFloat(emission.calculation.co2e);
+        totalCargo += parseFloat(emission.calculation.co2e);
       });
-      final["totalElectricityScope"] = totalElectricity;
+
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -711,6 +811,50 @@ app.get("/visualisation", async (request, response) => {
         e,
       });
     });
+
+  final["totalCargoScope"] = totalCargo;
+
+  await ElectricityEmission.find()
+    // if travel emissions exists
+    .then((emissions) => {
+
+      emissions.forEach((emission) => {
+        const date = new Date(emission.date);
+        electricityResult["Electricity"][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
+        total += parseFloat(emission.calculation.co2e);
+        totalElectricity += parseFloat(emission.calculation.co2e);
+      });
+
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+
+  await GSElectricityEmission.find()
+    // if travel emissions exists
+    .then((emissions) => {
+
+      emissions.forEach((emission) => {
+        const date = new Date(emission.date);
+        electricityResult["Electricity"][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
+        total += parseFloat(emission.calculation.co2e);
+        totalElectricity += parseFloat(emission.calculation.co2e);
+      });
+
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+
+  final["totalElectricityScope"] = totalElectricity;
 
   final["total"] = total;
   final["scope2"] = final["totalElectricityScope"];
@@ -741,5 +885,198 @@ app.get("/visualisation", async (request, response) => {
   });
   response.status(200).send(final);
 });
+
+async function travelEmissionfromSheets(range, type) {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: 'credential.json',
+    scopes: "https://www.googleapis.com/auth/spreadsheets",
+  });
+
+  // Create client instance for auth
+  const client = await auth.getClient();
+
+  // Instance of Google Sheets API
+  const googleSheets = google.sheets({ version: "v4", auth: client });
+
+  const spreadsheetId = "1iKDcpEX2v4BwxtisSFBPFoE1rg-Rr2D7j36n2DxuMcQ";
+
+  const getRows = await googleSheets.spreadsheets.values.get({
+    auth,
+    spreadsheetId,
+    range: range,
+  });
+
+  const allValues = getRows.data.values;
+
+  var travelEmissions = [];
+  if (allValues) {
+    await ClimatiqFactors.find({ category: "Travel" })
+      .then(async (climatiqFactors) => {
+        var factors = {};
+        climatiqFactors.forEach((factor) => {
+          factors[factor.type] = factor;
+        })
+        allValues.forEach(async (value) => {
+          const travelEmission = new GSTravelEmission({
+            date: Date(value[0]),
+            passengers: parseInt(value[1]),
+            factorType: 1,
+            travelBy: type,
+            distance: parseInt(value[2])
+          });
+          await axios({
+            method: 'POST',
+            url: 'https://beta3.api.climatiq.io/estimate',
+            data: JSON.stringify({
+              "emission_factor": factors[travelEmission.travelBy]["factors"][travelEmission.factorType]["factor"],
+              "parameters": {
+                "distance": travelEmission.distance,
+                "distance_unit": "km",
+                "passengers": travelEmission.passengers
+              }
+            }),
+            headers: {
+              Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
+            }
+          }).then(async function (res) {
+            travelEmission.calculation = res.data;
+            await travelEmission.save().then((addedEmission) => {
+              travelEmissions.push(addedEmission);
+            });
+          }).catch(function (error) {
+            console.log(error);
+          });
+        });
+      }).catch((e) => {
+        console.log(e);
+      });
+  }
+}
+
+async function cargoEmissionfromSheets(range, type) {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: 'credential.json',
+    scopes: "https://www.googleapis.com/auth/spreadsheets",
+  });
+
+  // Create client instance for auth
+  const client = await auth.getClient();
+
+  // Instance of Google Sheets API
+  const googleSheets = google.sheets({ version: "v4", auth: client });
+
+  const spreadsheetId = "1iKDcpEX2v4BwxtisSFBPFoE1rg-Rr2D7j36n2DxuMcQ";
+
+  const getRows = await googleSheets.spreadsheets.values.get({
+    auth,
+    spreadsheetId,
+    range: range,
+  });
+
+  const allValues = getRows.data.values;
+
+  if (allValues) {
+    await ClimatiqFactors.find({ category: "Cargo" })
+      .then(async (climatiqFactors) => {
+        var factors = {};
+        climatiqFactors.forEach((factor) => {
+          factors[factor.type] = factor;
+        })
+        allValues.forEach(async (value) => {
+          const cargoEmission = new GSCargoEmission({
+            date: Date(value[0]),
+            weight: parseInt(value[1]),
+            factorType: 1,
+            travelBy: type,
+            distance: parseInt(value[2])
+          });
+          await axios({
+            method: 'POST',
+            url: 'https://beta3.api.climatiq.io/estimate',
+            data: JSON.stringify({
+              "emission_factor": factors[cargoEmission.travelBy]["factors"][cargoEmission.factorType]["factor"],
+              "parameters": {
+                "distance": cargoEmission.distance,
+                "distance_unit": "km",
+                "weight": cargoEmission.weight
+              }
+            }),
+            headers: {
+              Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
+            }
+          }).then(async function (res) {
+            cargoEmission.calculation = res.data;
+            await cargoEmission.save()
+          }).catch(function (error) {
+            console.log(error);
+          });
+        });
+      }).catch((e) => {
+        console.log(e);
+      });
+  }
+}
+
+async function electricityEmissionfromSheets(range, type) {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: 'credential.json',
+    scopes: "https://www.googleapis.com/auth/spreadsheets",
+  });
+
+  // Create client instance for auth
+  const client = await auth.getClient();
+
+  // Instance of Google Sheets API
+  const googleSheets = google.sheets({ version: "v4", auth: client });
+
+  const spreadsheetId = "1iKDcpEX2v4BwxtisSFBPFoE1rg-Rr2D7j36n2DxuMcQ";
+
+  const getRows = await googleSheets.spreadsheets.values.get({
+    auth,
+    spreadsheetId,
+    range: range,
+  });
+
+  const allValues = getRows.data.values;
+
+  if (allValues) {
+    await ClimatiqFactors.find({ category: "Electricity" })
+      .then(async (climatiqFactors) => {
+        var factors = {};
+        climatiqFactors.forEach((factor) => {
+          factors[factor.type] = factor;
+        })
+        allValues.forEach(async (value) => {
+          const electricityEmission = new GSElectricityEmission({
+            date: Date(value[0]),
+            energy: parseInt(value[1]),
+            factorType: 1,
+          });
+          await axios({
+            method: 'POST',
+            url: 'https://beta3.api.climatiq.io/estimate',
+            data: JSON.stringify({
+              "emission_factor": {
+                "activity_id": factors[type]["factors"][electricityEmission.factorType]["factor"],
+              },
+              "parameters": {
+                "energy": electricityEmission.energy,
+              }
+            }),
+            headers: {
+              Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
+            }
+          }).then(async function (res) {
+            electricityEmission.calculation = res.data;
+            await electricityEmission.save()
+          }).catch(function (error) {
+            console.log(error);
+          });
+        });
+      }).catch((e) => {
+        console.log(e);
+      });
+  }
+}
 
 module.exports = app;

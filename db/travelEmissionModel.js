@@ -30,6 +30,11 @@ const TravelEmissionSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed,
         required: [true, "Please provide the calculation!"],
     },
+
+    fromSheets: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 module.exports = mongoose.model.TravelEmission || mongoose.model("TravelEmission", TravelEmissionSchema);
