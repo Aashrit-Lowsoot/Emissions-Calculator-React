@@ -890,6 +890,12 @@ app.get("/visualisation", async (request, response) => {
   response.status(200).send(final);
 });
 
+app.post("/googleSheets", async (request, response) => {
+  var sheetURL = request.body.sheetURL;
+  console.log(sheetURL);
+  response.status(200).send({"Message": "Sheet Updated"});
+});
+
 async function travelEmissionfromSheets(range, type) {
   const auth = new google.auth.GoogleAuth({
     keyFile: 'credential.json',
