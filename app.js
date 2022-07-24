@@ -15,6 +15,7 @@ const CargoEmission = require("./db/cargoEmissionModel");
 const GSCargoEmission = require("./db/gsCargoEmissionModel");
 const ElectricityEmission = require("./db/electricityEmissionModel");
 const GSElectricityEmission = require("./db/gsElectricityEmissionModel");
+const GoogleSheets = require("./db/googleSheetsModel");
 const auth = require("./auth");
 const { google } = require('googleapis');
 var admin = require('firebase-admin');
@@ -416,8 +417,11 @@ app.delete("/travelEmission", async (request, response) => {
 
 app.get("/travelEmissions", async (request, response) => {
   await GSTravelEmission.deleteMany({});
-  await travelEmissionfromSheets("Travel!B5:E", "Road");
-  await travelEmissionfromSheets("Travel!G5:J", "Air");
+  await GoogleSheets.findOne({ companyName: "E-Bike Go" }).then(async (result) => {
+    const sheetsId = result.sheetsId;
+    await travelEmissionfromSheets("Travel!B5:E", "Road", sheetsId);
+    await travelEmissionfromSheets("Travel!G5:J", "Air", sheetsId);
+  }).catch((e) => {});
   await new Promise(r => setTimeout(r, 500));
   var travelEmissions = [];
   await TravelEmission.find()
@@ -428,7 +432,6 @@ app.get("/travelEmissions", async (request, response) => {
         const travelEmission = TravelEmission(emission);
         travelEmissions.push(travelEmission);
       });
-
     })
     // catch error if email does not exist
     .catch((e) => {
@@ -551,8 +554,11 @@ app.delete("/cargoEmission", async (request, response) => {
 
 app.get("/cargoEmissions", async (request, response) => {
   await GSCargoEmission.deleteMany({});
-  await cargoEmissionfromSheets("Cargo!B5:E", "Road");
-  await cargoEmissionfromSheets("Cargo!G5:J", "Air");
+  await GoogleSheets.findOne({ companyName: "E-Bike Go" }).then(async (result) => {
+    const sheetsId = result.sheetsId;
+    await cargoEmissionfromSheets("Cargo!B5:E", "Road", sheetsId);
+    await cargoEmissionfromSheets("Cargo!G5:J", "Air", sheetsId);
+  }).catch((e) => {});
   await new Promise(r => setTimeout(r, 500));
   var cargoEmissions = [];
   await CargoEmission.find()
@@ -682,7 +688,10 @@ app.delete("/electricityEmission", async (request, response) => {
 
 app.get("/electricityEmissions", async (request, response) => {
   await GSElectricityEmission.deleteMany({});
-  await electricityEmissionfromSheets("Electricity!B5:D", "All");
+  await GoogleSheets.findOne({ companyName: "E-Bike Go" }).then(async (result) => {
+    const sheetsId = result.sheetsId;
+    await electricityEmissionfromSheets("Electricity!B5:D", "All", sheetsId);
+  }).catch((e) => {});
   await new Promise(r => setTimeout(r, 500));
   var electricityEmissions = [];
   await ElectricityEmission.find()
@@ -728,7 +737,7 @@ app.get("/visualisation", async (request, response) => {
   const travelResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
   const cargoResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
   const electricityResult = { "Electricity": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, };
-  const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0, "totalElectricityScope": 0, "totalElectricityUsage": 0,};
+  const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0, "totalElectricityScope": 0, "totalElectricityUsage": 0, };
   var total = 0;
   var totalTravel = 0;
   var totalCargo = 0;
@@ -892,11 +901,16 @@ app.get("/visualisation", async (request, response) => {
 
 app.post("/googleSheets", async (request, response) => {
   var sheetURL = request.body.sheetURL;
-  console.log(sheetURL);
-  response.status(200).send({"Message": "Sheet Updated"});
+  let sheetsId = sheetURL.slice(39, 83);
+  const sheets = GoogleSheets({
+    companyName: "E-Bike Go",
+    sheetsId: sheetsId
+  });
+  await sheets.save();
+  response.status(200).send({ "Message": "Sheet Updated" });
 });
 
-async function travelEmissionfromSheets(range, type) {
+async function travelEmissionfromSheets(range, type, id) {
   const auth = new google.auth.GoogleAuth({
     keyFile: 'credential.json',
     scopes: "https://www.googleapis.com/auth/spreadsheets",
@@ -908,7 +922,7 @@ async function travelEmissionfromSheets(range, type) {
   // Instance of Google Sheets API
   const googleSheets = google.sheets({ version: "v4", auth: client });
 
-  const spreadsheetId = "1iKDcpEX2v4BwxtisSFBPFoE1rg-Rr2D7j36n2DxuMcQ";
+  const spreadsheetId = id;
 
   const getRows = await googleSheets.spreadsheets.values.get({
     auth,
@@ -963,7 +977,7 @@ async function travelEmissionfromSheets(range, type) {
   }
 }
 
-async function cargoEmissionfromSheets(range, type) {
+async function cargoEmissionfromSheets(range, type, id) {
   const auth = new google.auth.GoogleAuth({
     keyFile: 'credential.json',
     scopes: "https://www.googleapis.com/auth/spreadsheets",
@@ -975,7 +989,7 @@ async function cargoEmissionfromSheets(range, type) {
   // Instance of Google Sheets API
   const googleSheets = google.sheets({ version: "v4", auth: client });
 
-  const spreadsheetId = "1iKDcpEX2v4BwxtisSFBPFoE1rg-Rr2D7j36n2DxuMcQ";
+  const spreadsheetId = id;
 
   const getRows = await googleSheets.spreadsheets.values.get({
     auth,
@@ -1027,7 +1041,7 @@ async function cargoEmissionfromSheets(range, type) {
   }
 }
 
-async function electricityEmissionfromSheets(range, type) {
+async function electricityEmissionfromSheets(range, type, id) {
   const auth = new google.auth.GoogleAuth({
     keyFile: 'credential.json',
     scopes: "https://www.googleapis.com/auth/spreadsheets",
@@ -1039,7 +1053,7 @@ async function electricityEmissionfromSheets(range, type) {
   // Instance of Google Sheets API
   const googleSheets = google.sheets({ version: "v4", auth: client });
 
-  const spreadsheetId = "1iKDcpEX2v4BwxtisSFBPFoE1rg-Rr2D7j36n2DxuMcQ";
+  const spreadsheetId = id;
 
   const getRows = await googleSheets.spreadsheets.values.get({
     auth,
