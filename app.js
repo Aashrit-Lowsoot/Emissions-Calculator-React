@@ -152,7 +152,7 @@ app.get("/free-endpoint", (request, response) => {
 });
 
 // authentication endpoint
-app.get("/auth-endpoint", auth, (request, response) => {
+app.get("/auth-endpoint", auth, async (request, response) => {
   response.send({ message: "You are authorized to access me" });
 });
 
@@ -421,7 +421,7 @@ app.get("/travelEmissions", async (request, response) => {
     const sheetsId = result.sheetsId;
     await travelEmissionfromSheets("Travel!B5:E", "Road", sheetsId);
     await travelEmissionfromSheets("Travel!G5:J", "Air", sheetsId);
-  }).catch((e) => {});
+  }).catch((e) => { });
   await new Promise(r => setTimeout(r, 500));
   var travelEmissions = [];
   await TravelEmission.find()
@@ -558,7 +558,7 @@ app.get("/cargoEmissions", async (request, response) => {
     const sheetsId = result.sheetsId;
     await cargoEmissionfromSheets("Cargo!B5:E", "Road", sheetsId);
     await cargoEmissionfromSheets("Cargo!G5:J", "Air", sheetsId);
-  }).catch((e) => {});
+  }).catch((e) => { });
   await new Promise(r => setTimeout(r, 500));
   var cargoEmissions = [];
   await CargoEmission.find()
@@ -691,7 +691,7 @@ app.get("/electricityEmissions", async (request, response) => {
   await GoogleSheets.findOne({ companyName: "E-Bike Go" }).then(async (result) => {
     const sheetsId = result.sheetsId;
     await electricityEmissionfromSheets("Electricity!B5:D", "All", sheetsId);
-  }).catch((e) => {});
+  }).catch((e) => { });
   await new Promise(r => setTimeout(r, 500));
   var electricityEmissions = [];
   await ElectricityEmission.find()
@@ -941,8 +941,9 @@ async function travelEmissionfromSheets(range, type, id) {
           factors[factor.type] = factor;
         })
         allValues.forEach(async (value) => {
+          var emissionDate = Date.parse(value[0]);
           const travelEmission = new GSTravelEmission({
-            date: Date(value[0]),
+            date: new Date(emissionDate),
             passengers: parseInt(value[1]),
             factorType: 1,
             travelBy: type,
@@ -1007,8 +1008,9 @@ async function cargoEmissionfromSheets(range, type, id) {
           factors[factor.type] = factor;
         })
         allValues.forEach(async (value) => {
+          var emissionDate = Date.parse(value[0]);
           const cargoEmission = new GSCargoEmission({
-            date: Date(value[0]),
+            date: new Date(emissionDate),
             weight: parseInt(value[1]),
             factorType: 1,
             travelBy: type,
@@ -1071,8 +1073,9 @@ async function electricityEmissionfromSheets(range, type, id) {
           factors[factor.type] = factor;
         })
         allValues.forEach(async (value) => {
+          var emissionDate = Date.parse(value[0]);
           const electricityEmission = new GSElectricityEmission({
-            date: Date(value[0]),
+            date: new Date(emissionDate),
             energy: parseInt(value[1]),
             factorType: 1,
           });
