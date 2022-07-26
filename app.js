@@ -92,8 +92,8 @@ app.post("/register", (request, response) => {
 // register endpoint
 app.post("/registerCompany", (request, response) => {
   const company = new Company({
-    name: "E-Bike Go",
-    companyId: "1"
+    name: "Kalyani",
+    companyId: "2"
   });
 
   // save the new company
@@ -354,100 +354,100 @@ app.get("/allElectricityFactors", (request, response) => {
 });
 
 app.get("/travelEmissions", auth, async (request, response) => {
-  await GSTravelEmission.deleteMany({});
   await User.findOne({ _id: request.user.userId }).then(async (user) => {
     const companyId = user.companyId;
+    console.log(companyId);
+    await GSTravelEmission.deleteMany({ companyId: companyId });
     await GoogleSheets.findOne({ companyId: companyId }).then(async (result) => {
       const sheetsId = result.sheetsId;
       await travelEmissionfromSheets("Travel!B5:E", "Road", sheetsId, companyId);
       await travelEmissionfromSheets("Travel!G5:J", "Air", sheetsId, companyId);
     }).catch((e) => { });
+    await new Promise(r => setTimeout(r, 500));
+    var travelEmissions = [];
+    await GSTravelEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+
+        emissions.forEach((emission) => {
+          const travelEmission = GSTravelEmission(emission);
+          travelEmissions.push(travelEmission);
+        });
+
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    response.status(200).send(travelEmissions);
   });
-
-  await new Promise(r => setTimeout(r, 500));
-  var travelEmissions = [];
-  await GSTravelEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-
-      emissions.forEach((emission) => {
-        const travelEmission = GSTravelEmission(emission);
-        travelEmissions.push(travelEmission);
-      });
-
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
-      });
-    });
-  response.status(200).send(travelEmissions);
 });
 
 app.get("/cargoEmissions", auth, async (request, response) => {
-  await GSCargoEmission.deleteMany({});
-
   await User.findOne({ _id: request.user.userId }).then(async (user) => {
     const companyId = user.companyId;
+    await GSCargoEmission.deleteMany({ companyId: companyId });
     await GoogleSheets.findOne({ companyId: companyId }).then(async (result) => {
       const sheetsId = result.sheetsId;
       await cargoEmissionfromSheets("Cargo!B5:E", "Road", sheetsId, companyId);
       await cargoEmissionfromSheets("Cargo!G5:J", "Air", sheetsId, companyId);
     }).catch((e) => { });
+    await new Promise(r => setTimeout(r, 500));
+    var cargoEmissions = [];
+    await GSCargoEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const cargoEmission = GSCargoEmission(emission);
+          cargoEmissions.push(cargoEmission);
+        });
+
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    response.status(200).send(cargoEmissions);
   });
 
-  await new Promise(r => setTimeout(r, 500));
-  var cargoEmissions = [];
-  await GSCargoEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-      emissions.forEach((emission) => {
-        const cargoEmission = GSCargoEmission(emission);
-        cargoEmissions.push(cargoEmission);
-      });
 
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
-      });
-    });
-  response.status(200).send(cargoEmissions);
 });
 
 app.get("/electricityEmissions", auth, async (request, response) => {
-  await GSElectricityEmission.deleteMany({});
   await User.findOne({ _id: request.user.userId }).then(async (user) => {
     const companyId = user.companyId;
+    await GSElectricityEmission.deleteMany({ companyId: companyId });
     await GoogleSheets.findOne({ companyId: companyId }).then(async (result) => {
       const sheetsId = result.sheetsId;
       await electricityEmissionfromSheets("Electricity!B5:D", "All", sheetsId, companyId);
     }).catch((e) => { });
+    await new Promise(r => setTimeout(r, 500));
+    var electricityEmissions = [];
+    await GSElectricityEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+
+        emissions.forEach((emission) => {
+          const electricityEmission = GSElectricityEmission(emission);
+          electricityEmissions.push(electricityEmission);
+        });
+
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    response.status(200).send(electricityEmissions);
   });
-  await new Promise(r => setTimeout(r, 500));
-  var electricityEmissions = [];
-  await GSElectricityEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-
-      emissions.forEach((emission) => {
-        const electricityEmission = GSElectricityEmission(emission);
-        electricityEmissions.push(electricityEmission);
-      });
-
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
-      });
-    });
-  response.status(200).send(electricityEmissions);
 });
 
 app.get("/visualisation", auth, async (request, response) => {
