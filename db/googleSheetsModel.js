@@ -1,9 +1,9 @@
 const mongoose = require("mongoose");
 
 const GoogleSheetsModel = new mongoose.Schema({
-    companyName: {
+    companyId: {
         type: String,
-        required: [true, "Please provide the company name!"],
+        required: [true, "Please provide the company id!"],
     },
 
     sheetsId: {

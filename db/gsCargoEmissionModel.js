@@ -35,6 +35,11 @@ const GSCargoEmissionSchema = new mongoose.Schema({
         type: Boolean,
         default: true,
     },
+    
+    companyId: {
+        type: String,
+        required: [true, "Please provide the company id!"],
+    },
 });
 
 module.exports = mongoose.model.GSCargoEmission || mongoose.model("GSCargoEmission", GSCargoEmissionSchema);

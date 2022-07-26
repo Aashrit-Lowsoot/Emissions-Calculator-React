@@ -30,10 +30,15 @@ const GSTravelEmissionSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.Mixed,
         required: [true, "Please provide the calculation!"],
     },
-
+    
     fromSheets: {
         type: Boolean,
         default: true,
+    },
+    
+    companyId: {
+        type: String,
+        required: [true, "Please provide the company id!"],
     },
 });
 

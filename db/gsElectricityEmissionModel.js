@@ -25,6 +25,11 @@ const GSElectricityEmissionModel = new mongoose.Schema({
         type: Boolean,
         default: true,
     },
+
+    companyId: {
+        type: String,
+        required: [true, "Please provide the company id!"],
+    },
 });
 
 module.exports = mongoose.model.GSElectricityEmission || mongoose.model("GSElectricityEmission", GSElectricityEmissionModel);

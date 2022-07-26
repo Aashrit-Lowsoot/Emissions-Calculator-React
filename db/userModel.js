@@ -12,6 +12,11 @@ const UserSchema = new mongoose.Schema({
         required: [true, "Please provide a password!"],
         unique: false,
     },
+
+    companyId: {
+        type: String,
+        required: [true, "Please provide a company id!"],
+    },
 });
 
 module.exports = mongoose.model.Users || mongoose.model("Users", UserSchema);

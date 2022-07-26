@@ -8,12 +8,10 @@ const axios = require('axios');
 // require database connection
 const dbConnect = require("./db/dbConnect");
 const User = require("./db/userModel");
+const Company = require("./db/companyModel");
 const ClimatiqFactors = require("./db/climatiqFactorModel");
-const TravelEmission = require("./db/travelEmissionModel");
 const GSTravelEmission = require("./db/gsTravelEmissionModel");
-const CargoEmission = require("./db/cargoEmissionModel");
 const GSCargoEmission = require("./db/gsCargoEmissionModel");
-const ElectricityEmission = require("./db/electricityEmissionModel");
 const GSElectricityEmission = require("./db/gsElectricityEmissionModel");
 const GoogleSheets = require("./db/googleSheetsModel");
 const auth = require("./auth");
@@ -61,6 +59,7 @@ app.post("/register", (request, response) => {
       const user = new User({
         email: request.body.email,
         password: hashedPassword,
+        companyId: request.body.companyId,
       });
 
       // save the new user
@@ -86,6 +85,32 @@ app.post("/register", (request, response) => {
       response.status(500).send({
         message: "Password was not hashed successfully",
         e,
+      });
+    });
+});
+
+// register endpoint
+app.post("/registerCompany", (request, response) => {
+  const company = new Company({
+    name: "E-Bike Go",
+    companyId: "1"
+  });
+
+  // save the new company
+  company
+    .save()
+    // return success if the new company is added to the database successfully
+    .then((result) => {
+      response.status(201).send({
+        message: "Company Created Successfully",
+        companyId: result.companyId,
+      });
+    })
+    // catch erroe if the new company wasn't added successfully to the database
+    .catch((error) => {
+      response.status(500).send({
+        message: "Error creating company",
+        error,
       });
     });
 });
@@ -153,6 +178,10 @@ app.get("/free-endpoint", (request, response) => {
 
 // authentication endpoint
 app.get("/auth-endpoint", auth, async (request, response) => {
+  console.log(request.user);
+  User.findOne({ _id: request.user.userId }).then((user) => {
+    console.log(user.companyId);
+  });
   response.send({ message: "You are authorized to access me" });
 });
 
@@ -324,122 +353,19 @@ app.get("/allElectricityFactors", (request, response) => {
 
 });
 
-app.post("/travelEmission", async (request, response) => {
-  ClimatiqFactors.find({ category: "Travel" })
-    .then(async (climatiqFactors) => {
-      var factors = {};
-      climatiqFactors.forEach((factor) => {
-        factors[factor.type] = factor;
-      })
-      const travelEmission = new TravelEmission(request.body);
-      travelEmission.fromSheets = false;
-      await axios({
-        method: 'POST',
-        url: 'https://beta3.api.climatiq.io/estimate',
-        data: JSON.stringify({
-          "emission_factor": factors[travelEmission.travelBy]["factors"][travelEmission.factorType]["factor"],
-          "parameters": {
-            "distance": travelEmission.distance,
-            "distance_unit": "km",
-            "passengers": travelEmission.passengers
-          }
-        }),
-        headers: {
-          Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
-        }
-      }).then(async function (res) {
-        travelEmission.calculation = res.data;
-        // save the new travel emission
-        var id = "";
-        await travelEmission.save().then((addedEmission) => {
-          id = addedEmission._id;
-        });
-        response.status(201).send({
-          message: "Travel Emission added successfully",
-          _id: id
-        });
-      }).catch(function (error) {
-        console.log(error);
-      });
-    }).catch((e) => {
-      response.status(404).send({
-        message: "Factors not found",
-        e,
-      });
-    });
-});
-
-app.put("/travelEmission", (request, response) => {
-  ClimatiqFactors.find({ category: "Travel" })
-    .then(async (climatiqFactors) => {
-      var factors = {};
-      climatiqFactors.forEach((factor) => {
-        factors[factor.type] = factor;
-      })
-      const travelEmission = new TravelEmission(request.body);
-      await axios({
-        method: 'POST',
-        url: 'https://beta3.api.climatiq.io/estimate',
-        data: JSON.stringify({
-          "emission_factor": factors[travelEmission.travelBy]["factors"][travelEmission.factorType]["factor"],
-          "parameters": {
-            "distance": travelEmission.distance,
-            "distance_unit": "km",
-            "passengers": travelEmission.passengers
-          }
-        }),
-        headers: {
-          Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
-        }
-      }).then(async function (response) {
-        travelEmission.calculation = response.data;
-        await TravelEmission.updateOne({ _id: travelEmission._id }, travelEmission);
-      }).catch(function (error) {
-        console.log(error);
-      });
-    }).catch((e) => {
-      response.status(404).send({
-        message: "Factors not found",
-        e,
-      });
-    });
-  response.status(200).send({
-    message: "Travel Emission updated successfully"
-  });
-});
-
-app.delete("/travelEmission", async (request, response) => {
-  await TravelEmission.deleteOne({ _id: request.body._id });
-  response.status(200).send({
-    message: "Travel Emission deleted successfully"
-  });
-});
-
-app.get("/travelEmissions", async (request, response) => {
+app.get("/travelEmissions", auth, async (request, response) => {
   await GSTravelEmission.deleteMany({});
-  await GoogleSheets.findOne({ companyName: "E-Bike Go" }).then(async (result) => {
-    const sheetsId = result.sheetsId;
-    await travelEmissionfromSheets("Travel!B5:E", "Road", sheetsId);
-    await travelEmissionfromSheets("Travel!G5:J", "Air", sheetsId);
-  }).catch((e) => { });
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    await GoogleSheets.findOne({ companyId: companyId }).then(async (result) => {
+      const sheetsId = result.sheetsId;
+      await travelEmissionfromSheets("Travel!B5:E", "Road", sheetsId, companyId);
+      await travelEmissionfromSheets("Travel!G5:J", "Air", sheetsId, companyId);
+    }).catch((e) => { });
+  });
+
   await new Promise(r => setTimeout(r, 500));
   var travelEmissions = [];
-  await TravelEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-
-      emissions.forEach((emission) => {
-        const travelEmission = TravelEmission(emission);
-        travelEmissions.push(travelEmission);
-      });
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
-      });
-    });
   await GSTravelEmission.find()
     // if travel emissions exists
     .then((emissions) => {
@@ -460,129 +386,26 @@ app.get("/travelEmissions", async (request, response) => {
   response.status(200).send(travelEmissions);
 });
 
-app.post("/cargoEmission", (request, response) => {
-  ClimatiqFactors.find({ category: "Cargo" })
-    .then(async (climatiqFactors) => {
-      var factors = {};
-      climatiqFactors.forEach((factor) => {
-        factors[factor.type] = factor;
-      })
-      const cargoEmission = new CargoEmission(request.body);
-      await axios({
-        method: 'POST',
-        url: 'https://beta3.api.climatiq.io/estimate',
-        data: JSON.stringify({
-          "emission_factor": factors[cargoEmission.travelBy]["factors"][cargoEmission.factorType]["factor"],
-          "parameters": {
-            "distance": cargoEmission.distance,
-            "distance_unit": "km",
-            "weight": cargoEmission.weight,
-            "weight_unit": "kg"
-          }
-        }),
-        headers: {
-          Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
-        }
-      }).then(async function (res) {
-        cargoEmission.calculation = res.data;
-        // save the new emission
-        var id = "";
-        await cargoEmission.save().then((addedEmission) => {
-          id = addedEmission._id;
-        });
-        response.status(201).send({
-          message: "Cargo Emission added successfully",
-          _id: id
-        });
-      }).catch(function (error) {
-        console.log(error);
-      });
-    }).catch((e) => {
-      response.status(404).send({
-        message: "Factors not found",
-        e: e.message,
-      });
-    });
-});
-
-app.put("/cargoEmission", (request, response) => {
-  ClimatiqFactors.find({ category: "Cargo" })
-    .then(async (climatiqFactors) => {
-      var factors = {};
-      climatiqFactors.forEach((factor) => {
-        factors[factor.type] = factor;
-      })
-      const cargoEmission = new CargoEmission(request.body);
-      await axios({
-        method: 'POST',
-        url: 'https://beta3.api.climatiq.io/estimate',
-        data: JSON.stringify({
-          "emission_factor": factors[cargoEmission.travelBy]["factors"][cargoEmission.factorType]["factor"],
-          "parameters": {
-            "distance": cargoEmission.distance,
-            "distance_unit": "km",
-            "weight": cargoEmission.weight,
-            "weight_unit": "kg"
-          }
-        }),
-        headers: {
-          Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
-        }
-      }).then(async function (response) {
-        cargoEmission.calculation = response.data;
-        await CargoEmission.updateOne({ _id: cargoEmission._id }, cargoEmission);
-      }).catch(function (error) {
-        console.log(error);
-      });
-    }).catch((e) => {
-      response.status(404).send({
-        message: "Factors not found",
-        e,
-      });
-    });
-  response.status(200).send({
-    message: "Cargo Emission updated successfully"
-  });
-});
-
-app.delete("/cargoEmission", async (request, response) => {
-  await CargoEmission.deleteOne({ _id: request.body._id });
-  response.status(200).send({
-    message: "Cargo Emission deleted successfully"
-  });
-});
-
-app.get("/cargoEmissions", async (request, response) => {
+app.get("/cargoEmissions", auth, async (request, response) => {
   await GSCargoEmission.deleteMany({});
-  await GoogleSheets.findOne({ companyName: "E-Bike Go" }).then(async (result) => {
-    const sheetsId = result.sheetsId;
-    await cargoEmissionfromSheets("Cargo!B5:E", "Road", sheetsId);
-    await cargoEmissionfromSheets("Cargo!G5:J", "Air", sheetsId);
-  }).catch((e) => { });
+
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    await GoogleSheets.findOne({ companyId: companyId }).then(async (result) => {
+      const sheetsId = result.sheetsId;
+      await cargoEmissionfromSheets("Cargo!B5:E", "Road", sheetsId, companyId);
+      await cargoEmissionfromSheets("Cargo!G5:J", "Air", sheetsId, companyId);
+    }).catch((e) => { });
+  });
+
   await new Promise(r => setTimeout(r, 500));
   var cargoEmissions = [];
-  await CargoEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-      emissions.forEach((emission) => {
-        const travelEmission = CargoEmission(emission);
-        cargoEmissions.push(travelEmission);
-      });
-
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
-      });
-    });
   await GSCargoEmission.find()
     // if travel emissions exists
     .then((emissions) => {
       emissions.forEach((emission) => {
-        const travelEmission = CargoEmission(emission);
-        cargoEmissions.push(travelEmission);
+        const cargoEmission = GSCargoEmission(emission);
+        cargoEmissions.push(cargoEmission);
       });
 
     })
@@ -596,128 +419,23 @@ app.get("/cargoEmissions", async (request, response) => {
   response.status(200).send(cargoEmissions);
 });
 
-app.post("/electricityEmission", (request, response) => {
-  ClimatiqFactors.find({ category: "Electricity" })
-    .then(async (climatiqFactors) => {
-      var factors = {};
-      climatiqFactors.forEach((factor) => {
-        factors[factor.type] = factor;
-      })
-      const electricityEmission = new ElectricityEmission(request.body);
-      await axios({
-        method: 'POST',
-        url: 'https://beta3.api.climatiq.io/estimate',
-        data: JSON.stringify({
-          "emission_factor": {
-            "activity_id": factors["All"]["factors"][electricityEmission.factorType]["factor"],
-          },
-          "parameters": {
-            "energy": electricityEmission.energy,
-          }
-        }),
-        headers: {
-          Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
-        }
-      }).then(async function (res) {
-        electricityEmission.calculation = res.data;
-        // save the new emission
-        var id = "";
-        await electricityEmission.save().then((addedEmission) => {
-          id = addedEmission._id;
-        });
-        response.status(201).send({
-          message: "Electricity Emission added successfully",
-          _id: id
-        });
-      }).catch(function (error) {
-        console.log(error);
-      });
-    }).catch((e) => {
-      response.status(404).send({
-        message: "Factors not found",
-        e: e.message,
-      });
-    });
-});
-
-app.put("/electricityEmission", (request, response) => {
-  ClimatiqFactors.find({ category: "Electricity" })
-    .then(async (climatiqFactors) => {
-      var factors = {};
-      climatiqFactors.forEach((factor) => {
-        factors[factor.type] = factor;
-      })
-      const electricityEmission = new ElectricityEmission(request.body);
-      await axios({
-        method: 'POST',
-        url: 'https://beta3.api.climatiq.io/estimate',
-        data: JSON.stringify({
-          "emission_factor": {
-            "activity_id": factors["All"]["factors"][electricityEmission.factorType]["factor"],
-          },
-          "parameters": {
-            "energy": electricityEmission.energy,
-          }
-        }),
-        headers: {
-          Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
-        }
-      }).then(async function (response) {
-        electricityEmission.calculation = response.data;
-        await ElectricityEmission.updateOne({ _id: electricityEmission._id }, electricityEmission);
-      }).catch(function (error) {
-        console.log(error);
-      });
-    }).catch((e) => {
-      response.status(404).send({
-        message: "Factors not found",
-        e,
-      });
-    });
-  response.status(200).send({
-    message: "Electricity Emission updated successfully"
-  });
-});
-
-app.delete("/electricityEmission", async (request, response) => {
-  await ElectricityEmission.deleteOne({ _id: request.body._id });
-  response.status(200).send({
-    message: "Electricity Emission deleted successfully"
-  });
-});
-
-app.get("/electricityEmissions", async (request, response) => {
+app.get("/electricityEmissions", auth, async (request, response) => {
   await GSElectricityEmission.deleteMany({});
-  await GoogleSheets.findOne({ companyName: "E-Bike Go" }).then(async (result) => {
-    const sheetsId = result.sheetsId;
-    await electricityEmissionfromSheets("Electricity!B5:D", "All", sheetsId);
-  }).catch((e) => { });
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    await GoogleSheets.findOne({ companyId: companyId }).then(async (result) => {
+      const sheetsId = result.sheetsId;
+      await electricityEmissionfromSheets("Electricity!B5:D", "All", sheetsId, companyId);
+    }).catch((e) => { });
+  });
   await new Promise(r => setTimeout(r, 500));
   var electricityEmissions = [];
-  await ElectricityEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-
-      emissions.forEach((emission) => {
-        const electricityEmission = ElectricityEmission(emission);
-        electricityEmissions.push(electricityEmission);
-      });
-
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
-      });
-    });
-
   await GSElectricityEmission.find()
     // if travel emissions exists
     .then((emissions) => {
 
       emissions.forEach((emission) => {
-        const electricityEmission = ElectricityEmission(emission);
+        const electricityEmission = GSElectricityEmission(emission);
         electricityEmissions.push(electricityEmission);
       });
 
@@ -732,185 +450,138 @@ app.get("/electricityEmissions", async (request, response) => {
   response.status(200).send(electricityEmissions);
 });
 
-app.get("/visualisation", async (request, response) => {
-  const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const travelResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
-  const cargoResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
-  const electricityResult = { "Electricity": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, };
-  const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0, "totalElectricityScope": 0, "totalElectricityUsage": 0, };
-  var total = 0;
-  var totalTravel = 0;
-  var totalCargo = 0;
-  var totalElectricity = 0;
-  var totalElectricityUsage = 0;
+app.get("/visualisation", auth, async (request, response) => {
 
-  await TravelEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-      emissions.forEach((emission) => {
-        const date = new Date(emission.date);
-        travelResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
-        total += parseFloat(emission.calculation.co2e);
-        totalTravel += parseFloat(emission.calculation.co2e);
-      });
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
-      });
-    });
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const travelResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
+    const cargoResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
+    const electricityResult = { "Electricity": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, };
+    const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0, "totalElectricityScope": 0, "totalElectricityUsage": 0, };
+    var total = 0;
+    var totalTravel = 0;
+    var totalCargo = 0;
+    var totalElectricity = 0;
+    var totalElectricityUsage = 0;
 
-  await GSTravelEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-      emissions.forEach((emission) => {
-        const date = new Date(emission.date);
-        travelResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
-        total += parseFloat(emission.calculation.co2e);
-        totalTravel += parseFloat(emission.calculation.co2e);
-      });
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
-      });
-    });
-
-  final["totalTravelScope"] = totalTravel;
-
-  await CargoEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-
-      emissions.forEach((emission) => {
-        const date = new Date(emission.date);
-        cargoResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
-        total += parseFloat(emission.calculation.co2e);
-        totalCargo += parseFloat(emission.calculation.co2e);
+    await GSTravelEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          travelResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
+          total += parseFloat(emission.calculation.co2e);
+          totalTravel += parseFloat(emission.calculation.co2e);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
       });
 
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
-      });
-    });
+    final["totalTravelScope"] = totalTravel;
 
-  await GSCargoEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
+    await GSCargoEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
 
-      emissions.forEach((emission) => {
-        const date = new Date(emission.date);
-        cargoResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
-        total += parseFloat(emission.calculation.co2e);
-        totalCargo += parseFloat(emission.calculation.co2e);
-      });
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          cargoResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
+          total += parseFloat(emission.calculation.co2e);
+          totalCargo += parseFloat(emission.calculation.co2e);
+        });
 
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
-      });
-    });
-
-  final["totalCargoScope"] = totalCargo;
-
-  await ElectricityEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-
-      emissions.forEach((emission) => {
-        const date = new Date(emission.date);
-        electricityResult["Electricity"][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
-        total += parseFloat(emission.calculation.co2e);
-        totalElectricity += parseFloat(emission.calculation.co2e);
-        totalElectricityUsage += parseInt(emission.energy);
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
       });
 
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
+    final["totalCargoScope"] = totalCargo;
+
+    await GSElectricityEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          electricityResult["Electricity"][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
+          total += parseFloat(emission.calculation.co2e);
+          totalElectricity += parseFloat(emission.calculation.co2e);
+          totalElectricityUsage += parseInt(emission.energy);
+        });
+
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+
+    final["totalElectricityScope"] = totalElectricity;
+    final["totalElectricityUsage"] = totalElectricityUsage;
+
+    final["total"] = total;
+    final["scope2"] = final["totalElectricityScope"];
+    final["scope3"] = final["totalTravelScope"] + final["totalCargoScope"];
+
+    final["Travel"] = {};
+    Object.keys(travelResult).forEach((key) => {
+      final["Travel"][key] = [];
+      Object.keys(travelResult[key]).forEach((month) => {
+        final["Travel"][key].push({ "month": month, "emission": travelResult[key][month] });
       });
     });
 
-  await GSElectricityEmission.find()
-    // if travel emissions exists
-    .then((emissions) => {
-
-      emissions.forEach((emission) => {
-        const date = new Date(emission.date);
-        electricityResult["Electricity"][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
-        total += parseFloat(emission.calculation.co2e);
-        totalElectricity += parseFloat(emission.calculation.co2e);
-        totalElectricityUsage += parseInt(emission.energy);
-      });
-
-    })
-    // catch error if email does not exist
-    .catch((e) => {
-      response.status(404).send({
-        message: "Data not found",
-        e,
+    final["Cargo"] = {};
+    Object.keys(cargoResult).forEach((key) => {
+      final["Cargo"][key] = [];
+      Object.keys(cargoResult[key]).forEach((month) => {
+        final["Cargo"][key].push({ "month": month, "emission": cargoResult[key][month] });
       });
     });
 
-  final["totalElectricityScope"] = totalElectricity;
-  final["totalElectricityUsage"] = totalElectricityUsage;
-
-  final["total"] = total;
-  final["scope2"] = final["totalElectricityScope"];
-  final["scope3"] = final["totalTravelScope"] + final["totalCargoScope"];
-
-  final["Travel"] = {};
-  Object.keys(travelResult).forEach((key) => {
-    final["Travel"][key] = [];
-    Object.keys(travelResult[key]).forEach((month) => {
-      final["Travel"][key].push({ "month": month, "emission": travelResult[key][month] });
+    final["Electricity"] = {};
+    Object.keys(electricityResult).forEach((key) => {
+      final["Electricity"][key] = [];
+      Object.keys(electricityResult[key]).forEach((month) => {
+        final["Electricity"][key].push({ "month": month, "emission": electricityResult[key][month] });
+      });
     });
+    response.status(200).send(final);
   });
-
-  final["Cargo"] = {};
-  Object.keys(cargoResult).forEach((key) => {
-    final["Cargo"][key] = [];
-    Object.keys(cargoResult[key]).forEach((month) => {
-      final["Cargo"][key].push({ "month": month, "emission": cargoResult[key][month] });
-    });
-  });
-
-  final["Electricity"] = {};
-  Object.keys(electricityResult).forEach((key) => {
-    final["Electricity"][key] = [];
-    Object.keys(electricityResult[key]).forEach((month) => {
-      final["Electricity"][key].push({ "month": month, "emission": electricityResult[key][month] });
-    });
-  });
-  response.status(200).send(final);
 });
 
-app.post("/googleSheets", async (request, response) => {
+app.post("/googleSheets", auth, async (request, response) => {
   var sheetURL = request.body.sheetURL;
   let sheetsId = sheetURL.slice(39, 83);
-  const sheets = GoogleSheets({
-    companyName: "E-Bike Go",
-    sheetsId: sheetsId
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    GoogleSheets.findOne({ companyId: user.companyId }).then(async (sheets) => {
+      sheets.sheetsId = sheetsId;
+      await sheets.save();
+    }).catch(async (e) => {
+      const sheets = GoogleSheets({
+        companyId: user.companyId,
+        sheetsId: sheetsId
+      });
+      await sheets.save();
+    });
   });
-  await sheets.save();
+
   response.status(200).send({ "Message": "Sheet Updated" });
 });
 
-async function travelEmissionfromSheets(range, type, id) {
+async function travelEmissionfromSheets(range, type, id, companyId) {
   const auth = new google.auth.GoogleAuth({
     keyFile: 'credential.json',
     scopes: "https://www.googleapis.com/auth/spreadsheets",
@@ -947,7 +618,8 @@ async function travelEmissionfromSheets(range, type, id) {
             passengers: parseInt(value[1]),
             factorType: 1,
             travelBy: type,
-            distance: parseInt(value[2])
+            distance: parseInt(value[2]),
+            companyId: companyId,
           });
           await axios({
             method: 'POST',
@@ -978,7 +650,7 @@ async function travelEmissionfromSheets(range, type, id) {
   }
 }
 
-async function cargoEmissionfromSheets(range, type, id) {
+async function cargoEmissionfromSheets(range, type, id, companyId) {
   const auth = new google.auth.GoogleAuth({
     keyFile: 'credential.json',
     scopes: "https://www.googleapis.com/auth/spreadsheets",
@@ -1014,7 +686,8 @@ async function cargoEmissionfromSheets(range, type, id) {
             weight: parseInt(value[1]),
             factorType: 1,
             travelBy: type,
-            distance: parseInt(value[2])
+            distance: parseInt(value[2]),
+            companyId: companyId,
           });
           await axios({
             method: 'POST',
@@ -1043,7 +716,7 @@ async function cargoEmissionfromSheets(range, type, id) {
   }
 }
 
-async function electricityEmissionfromSheets(range, type, id) {
+async function electricityEmissionfromSheets(range, type, id, companyId) {
   const auth = new google.auth.GoogleAuth({
     keyFile: 'credential.json',
     scopes: "https://www.googleapis.com/auth/spreadsheets",
@@ -1078,6 +751,7 @@ async function electricityEmissionfromSheets(range, type, id) {
             date: new Date(emissionDate),
             energy: parseInt(value[1]),
             factorType: 1,
+            companyId: companyId,
           });
           await axios({
             method: 'POST',
