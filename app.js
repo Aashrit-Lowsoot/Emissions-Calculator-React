@@ -458,12 +458,13 @@ app.get("/visualisation", auth, async (request, response) => {
     const travelResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
     const cargoResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
     const electricityResult = { "Electricity": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, };
-    const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0, "totalElectricityScope": 0, "totalElectricityUsage": 0, };
+    const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0, "totalElectricityScope": 0, "totalElectricityUsage": 0, "totalDistanceTravelled": 0, };
     var total = 0;
     var totalTravel = 0;
     var totalCargo = 0;
     var totalElectricity = 0;
     var totalElectricityUsage = 0;
+    var totalDistanceTravelled = 0;
 
     await GSTravelEmission.find({ companyId: companyId })
       // if travel emissions exists
@@ -473,6 +474,7 @@ app.get("/visualisation", auth, async (request, response) => {
           travelResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
           total += parseFloat(emission.calculation.co2e);
           totalTravel += parseFloat(emission.calculation.co2e);
+          totalDistanceTravelled += parseInt(emission.distance);
         });
       })
       // catch error if email does not exist
@@ -494,6 +496,7 @@ app.get("/visualisation", auth, async (request, response) => {
           cargoResult[emission.travelBy][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
           total += parseFloat(emission.calculation.co2e);
           totalCargo += parseFloat(emission.calculation.co2e);
+          totalDistanceTravelled += parseInt(emission.distance);
         });
 
       })
@@ -506,6 +509,7 @@ app.get("/visualisation", auth, async (request, response) => {
       });
 
     final["totalCargoScope"] = totalCargo;
+    final["totalDistanceTravelled"] = totalDistanceTravelled;
 
     await GSElectricityEmission.find({ companyId: companyId })
       // if travel emissions exists
