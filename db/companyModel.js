@@ -8,6 +8,10 @@ const CompanySchema = new mongoose.Schema({
     companyId: {
         type: String,
     },
+
+    logo: {
+        type: String,
+    },
 });
 
 module.exports = mongoose.model.Company || mongoose.model("Company", CompanySchema);

@@ -115,6 +115,18 @@ app.post("/registerCompany", (request, response) => {
     });
 });
 
+// register endpoint
+app.get("/getLogo", auth, async (request, response) => {
+  await User.findOne({ _id: request.user.userId }).then(async (user) => { 
+    await Company.findOne({ companyId: user.companyId }).then(async (company) => { 
+      response.status(200).send({
+        name: company.name,
+        logo: company.logo,
+      });
+    });
+  });
+});
+
 // login endpoint
 app.post("/login", (request, response) => {
   // check if email exists
