@@ -90,30 +90,30 @@ app.post("/register", (request, response) => {
 });
 
 // register endpoint
-// app.post("/registerCompany", (request, response) => {
-//   const company = new Company({
-//     name: "Kalyani",
-//     companyId: "2"
-//   });
+app.post("/registerCompany", (request, response) => {
+  const company = new Company({
+    name: "Kalyani",
+    companyId: "2"
+  });
 
-//   // save the new company
-//   company
-//     .save()
-//     // return success if the new company is added to the database successfully
-//     .then((result) => {
-//       response.status(201).send({
-//         message: "Company Created Successfully",
-//         companyId: result.companyId,
-//       });
-//     })
-//     // catch erroe if the new company wasn't added successfully to the database
-//     .catch((error) => {
-//       response.status(500).send({
-//         message: "Error creating company",
-//         error,
-//       });
-//     });
-// });
+  // save the new company
+  company
+    .save()
+    // return success if the new company is added to the database successfully
+    .then((result) => {
+      response.status(201).send({
+        message: "Company Created Successfully",
+        companyId: result.companyId,
+      });
+    })
+    // catch erroe if the new company wasn't added successfully to the database
+    .catch((error) => {
+      response.status(500).send({
+        message: "Error creating company",
+        error,
+      });
+    });
+});
 
 // register endpoint
 app.get("/getLogo", auth, async (request, response) => {
