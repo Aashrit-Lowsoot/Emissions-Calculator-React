@@ -13,6 +13,7 @@ const ClimatiqFactors = require("./db/climatiqFactorModel");
 const GSTravelEmission = require("./db/gsTravelEmissionModel");
 const GSCargoEmission = require("./db/gsCargoEmissionModel");
 const GSElectricityEmission = require("./db/gsElectricityEmissionModel");
+const GSFuelEmission = require("./db/gsFuelEmissionModel");
 const GoogleSheets = require("./db/googleSheetsModel");
 const auth = require("./auth");
 const { google } = require('googleapis');
@@ -285,6 +286,35 @@ app.get("/electricityFactors", (request, response) => {
 });
 
 // getFactors endpoint
+app.get("/fuelFactors", (request, response) => {
+
+  ClimatiqFactors.findOne({ type: request.body.type, category: "Fuel" })
+
+    // if email exists
+    .then((climatiq) => {
+      // compare the password entered and the hashed password found
+      var factors = {};
+      const keys = Object.keys(climatiq.factors);
+      keys.forEach((key) => {
+        if (request.body.getName) {
+          factors[key] = climatiq.factors[key].name;
+        } else {
+          factors[key] = climatiq.factors[key].factor;
+        }
+      });
+      //   return success response
+      response.status(200).send(factors);
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+});
+
+// getFactors endpoint
 app.get("/allTravelFactors", (request, response) => {
 
   ClimatiqFactors.find({ category: "Travel" })
@@ -342,6 +372,33 @@ app.get("/allCargoFactors", (request, response) => {
 app.get("/allElectricityFactors", (request, response) => {
 
   ClimatiqFactors.find({ category: "Electricity" })
+    // if travel emissions exists
+    .then((factors) => {
+      var allFactors = {};
+      factors.forEach((climatiq) => {
+        var factors = [];
+        const keys = Object.keys(climatiq.factors);
+        keys.forEach((key) => {
+          factors.push({ "id": key, "factor": climatiq.factors[key].name });
+        });
+        allFactors[climatiq.type] = factors;
+      });
+      response.status(200).send(allFactors);
+    })
+    // catch error if email does not exist
+    .catch((e) => {
+      response.status(404).send({
+        message: "Data not found",
+        e,
+      });
+    });
+
+});
+
+// getFactors endpoint
+app.get("/allFuelFactors", (request, response) => {
+
+  ClimatiqFactors.find({ category: "Fuel" })
     // if travel emissions exists
     .then((factors) => {
       var allFactors = {};
@@ -437,7 +494,7 @@ app.get("/electricityEmissions", auth, async (request, response) => {
     await GSElectricityEmission.deleteMany({ companyId: companyId });
     await GoogleSheets.findOne({ companyId: companyId }).then(async (result) => {
       const sheetsId = result.sheetsId;
-      await electricityEmissionfromSheets("Electricity!B5:D", "All", sheetsId, companyId);
+      await electricityEmissionfromSheets("Fuel!B5:D", "All", sheetsId, companyId);
     }).catch((e) => { });
     await new Promise(r => setTimeout(r, 500));
     var electricityEmissions = [];
@@ -462,6 +519,37 @@ app.get("/electricityEmissions", auth, async (request, response) => {
   });
 });
 
+app.get("/fuelEmissions", auth, async (request, response) => {
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    await GSFuelEmission.deleteMany({ companyId: companyId });
+    await GoogleSheets.findOne({ companyId: companyId }).then(async (result) => {
+      const sheetsId = result.sheetsId;
+      await fuelEmissionfromSheets("Fuel!B5:D", "All", sheetsId, companyId);
+    }).catch((e) => { });
+    await new Promise(r => setTimeout(r, 500));
+    var fuelEmissions = [];
+    await GSFuelEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+
+        emissions.forEach((emission) => {
+          const fuelEmission = GSFuelEmission(emission);
+          fuelEmissions.push(fuelEmission);
+        });
+
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    response.status(200).send(fuelEmissions);
+  });
+});
+
 app.get("/visualisation", auth, async (request, response) => {
 
   await User.findOne({ _id: request.user.userId }).then(async (user) => {
@@ -470,13 +558,16 @@ app.get("/visualisation", auth, async (request, response) => {
     const travelResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
     const cargoResult = { "Road": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Air": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Sea": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, "Rail": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 } };
     const electricityResult = { "Electricity": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, };
-    const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0, "totalElectricityScope": 0, "totalElectricityUsage": 0, "totalDistanceTravelled": 0, };
+    const fuelResult = { "Fuel": { "January": 0, "February": 0, "March": 0, "April": 0, "May": 0, "June": 0, "July": 0, "August": 0, "September": 0, "October": 0, "November": 0, "December": 0 }, };
+    const final = { "total": 0, "scope1": 0, "scope2": 0, "scope3": 0, "totalTravelScope": 0, "totalCargoScope": 0, "totalElectricityScope": 0, "totalFuelScope": 0, "totalElectricityUsage": 0, "totalDistanceTravelled": 0, "totalFuelExpenditure": 0 };
     var total = 0;
     var totalTravel = 0;
     var totalCargo = 0;
     var totalElectricity = 0;
+    var totalFuel = 0;
     var totalElectricityUsage = 0;
     var totalDistanceTravelled = 0;
+    var totalFuelExpenditure = 0;
 
     await GSTravelEmission.find({ companyId: companyId })
       // if travel emissions exists
@@ -547,6 +638,30 @@ app.get("/visualisation", auth, async (request, response) => {
     final["totalElectricityScope"] = totalElectricity;
     final["totalElectricityUsage"] = totalElectricityUsage;
 
+    await GSFuelEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          fuelResult["Fuel"][months[date.getMonth()]] += parseFloat(emission.calculation.co2e);
+          total += parseFloat(emission.calculation.co2e);
+          totalFuel += parseFloat(emission.calculation.co2e);
+          totalFuelExpenditure += parseInt(emission.money);
+        });
+
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+
+    final["totalFuelScope"] = totalFuel;
+    final["totalFuelExpenditure"] = totalFuelExpenditure;
+
     final["total"] = total;
     final["scope2"] = final["totalElectricityScope"];
     final["scope3"] = final["totalTravelScope"] + final["totalCargoScope"];
@@ -572,6 +687,14 @@ app.get("/visualisation", auth, async (request, response) => {
       final["Electricity"][key] = [];
       Object.keys(electricityResult[key]).forEach((month) => {
         final["Electricity"][key].push({ "month": month, "emission": electricityResult[key][month] });
+      });
+    });
+
+    final["Fuel"] = {};
+    Object.keys(fuelResult).forEach((key) => {
+      final["Fuel"][key] = [];
+      Object.keys(fuelResult[key]).forEach((month) => {
+        final["Fuel"][key].push({ "month": month, "emission": fuelResult[key][month] });
       });
     });
     response.status(200).send(final);
@@ -786,6 +909,71 @@ async function electricityEmissionfromSheets(range, type, id, companyId) {
           }).then(async function (res) {
             electricityEmission.calculation = res.data;
             await electricityEmission.save()
+          }).catch(function (error) {
+            console.log(error);
+          });
+        });
+      }).catch((e) => {
+        console.log(e);
+      });
+  }
+}
+
+async function fuelEmissionfromSheets(range, type, id, companyId) {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: 'credential.json',
+    scopes: "https://www.googleapis.com/auth/spreadsheets",
+  });
+
+  // Create client instance for auth
+  const client = await auth.getClient();
+
+  // Instance of Google Sheets API
+  const googleSheets = google.sheets({ version: "v4", auth: client });
+
+  const spreadsheetId = id;
+
+  const getRows = await googleSheets.spreadsheets.values.get({
+    auth,
+    spreadsheetId,
+    range: range,
+  });
+
+  const allValues = getRows.data.values;
+
+  if (allValues) {
+    await ClimatiqFactors.find({ category: "Fuel" })
+      .then(async (climatiqFactors) => {
+        var factors = {};
+        climatiqFactors.forEach((factor) => {
+          factors[factor.type] = factor;
+        })
+        allValues.forEach(async (value) => {
+          var emissionDate = Date.parse(value[0]);
+          const fuelEmission = new GSFuelEmission({
+            date: new Date(emissionDate),
+            money: parseInt(value[1]),
+            factorType: 1,
+            companyId: companyId,
+          });
+          await axios({
+            method: 'POST',
+            url: 'https://beta3.api.climatiq.io/estimate',
+            data: JSON.stringify({
+              "emission_factor": {
+                "activity_id": factors[type]["factors"][fuelEmission.factorType]["factor"],
+              },
+              "parameters": {
+                "money": fuelEmission.money,
+                "money_unit": "inr"
+              }
+            }),
+            headers: {
+              Authorization: 'Bearer ' + 'TABXE4QS5FMMCENSPQJXWRYJ13XD'
+            }
+          }).then(async function (res) {
+            fuelEmission.calculation = res.data;
+            await fuelEmission.save()
           }).catch(function (error) {
             console.log(error);
           });
