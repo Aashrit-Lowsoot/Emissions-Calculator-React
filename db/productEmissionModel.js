@@ -1,24 +1,15 @@
 const mongoose = require("mongoose");
 
-const TravelEmissionSchema = new mongoose.Schema({
-    passengers: {
+const ProductEmissionSchema = new mongoose.Schema({
+    
+    numberOfItems: {
         type: Number,
-        default: 1
+        required: [true, "Please provide the no. of items!"],
     },
 
-    distance: {
-        type: Number,
-        required: [true, "Please provide the dstance!"],
-    },
-
-    travelBy: {
+    type: {
         type: String,
-        required: [true, "Please provide the travel by!"],
-    },
-
-    factorType: {
-        type: Number,
-        required: [true, "Please provide the factor type!"],
+        required: [true, "Please provide the product type!"],
     },
 
     date: {
@@ -42,4 +33,4 @@ const TravelEmissionSchema = new mongoose.Schema({
     },
 });
 
-module.exports = mongoose.model.TravelEmission || mongoose.model("TravelEmission", TravelEmissionSchema);
+module.exports = mongoose.model.ProductEmission || mongoose.model("ProductEmission", ProductEmissionSchema);

@@ -1,14 +1,15 @@
 const mongoose = require("mongoose");
 
-const ElectricityEmissionModel = new mongoose.Schema({
-    energy: {
+const GSProductEmissionSchema = new mongoose.Schema({
+    
+    numberOfItems: {
         type: Number,
-        default: 1
+        required: [true, "Please provide the no. of items!"],
     },
 
-    factorType: {
-        type: Number,
-        required: [true, "Please provide the factor type!"],
+    type: {
+        type: String,
+        required: [true, "Please provide the product type!"],
     },
 
     date: {
@@ -23,7 +24,7 @@ const ElectricityEmissionModel = new mongoose.Schema({
 
     fromSheets: {
         type: Boolean,
-        default: false,
+        default: true,
     },
 
     companyId: {
@@ -32,4 +33,4 @@ const ElectricityEmissionModel = new mongoose.Schema({
     },
 });
 
-module.exports = mongoose.model.ElectricityEmission || mongoose.model("ElectricityEmission", ElectricityEmissionModel);
+module.exports = mongoose.model.GSProductEmission || mongoose.model("GSProductEmission", GSProductEmissionSchema);
