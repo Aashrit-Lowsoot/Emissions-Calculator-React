@@ -16,6 +16,11 @@ const TravelEmissionSchema = new mongoose.Schema({
         required: [true, "Please provide the travel by!"],
     },
 
+    travelType: {
+        type: String,
+        required: [true, "Please provide the travel type!"],
+    },
+
     factorType: {
         type: Number,
         required: [true, "Please provide the factor type!"],

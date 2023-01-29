@@ -19,6 +19,8 @@ const ElectricityEmission = require("./db/electricityEmissionModel");
 const GSElectricityEmission = require("./db/gsElectricityEmissionModel");
 const ProductEmission = require("./db/productEmissionModel");
 const GSProductEmission = require("./db/gsProductEmissionModel");
+const BuildingEmission = require("./db/buildingEmissionModel");
+const GSBuildingEmission = require("./db/gsBuildingEmissionModel");
 const GoogleSheets = require("./db/googleSheetsModel");
 const auth = require("./auth");
 const { google } = require("googleapis");
@@ -536,7 +538,7 @@ app.get("/travelEmissions", auth, async (request, response) => {
       .then(async (result) => {
         const sheetsId = result.sheetsId;
         await travelEmissionfromSheets(
-          "Travel!B5:E",
+          "Travel!B5:F",
           "Road",
           sheetsId,
           companyId
@@ -907,6 +909,16 @@ app.get("/electricityEmissions", auth, async (request, response) => {
   });
 });
 
+const productCarbonData = {
+  "Maternity Bra": { companyAVG: 1.305869463, industryAVG: 1.37 },
+  "Regular Bra": { companyAVG: 1.29938542, industryAVG: 1.37 },
+  "Panty": { companyAVG: 0.7263671483, industryAVG: 2.4 },
+  "Lounge Long Tee Kind": { companyAVG: 2.777067598, industryAVG: 0 },
+  "Lounge Dress Kind": { companyAVG: 5.987879838, industryAVG: 0 },
+  "Nighty": { companyAVG: 7.480894064, industryAVG: 0 },
+  "Lounge Bottom": { companyAVG: 5.97522149, industryAVG: 0 },
+};
+
 app.get("/fuelEmissions", auth, async (request, response) => {
   await User.findOne({ _id: request.user.userId }).then(async (user) => {
     const companyId = user.companyId;
@@ -945,7 +957,15 @@ app.post("/productEmission", auth, async (request, response) => {
     const productEmission = new ProductEmission(request.body);
     productEmission.fromSheets = false;
     productEmission.companyId = companyId;
-    productEmission.calculation = productEmission.numberOfItems * 2;
+    productEmission.calculation = {
+      carbonEmitted:
+        productEmission.numberOfItems *
+        productCarbonData[productEmission.type]["companyAVG"],
+      carbonSaved:
+        productEmission.numberOfItems *
+        (productCarbonData[productEmission.type]["industryAVG"] -
+          productCarbonData[productEmission.type]["companyAVG"]),
+    };
     var id = "";
     await productEmission.save().then((addedEmission) => {
       id = addedEmission._id;
@@ -959,7 +979,15 @@ app.post("/productEmission", auth, async (request, response) => {
 
 app.put("/productEmission", auth, async (request, response) => {
   const productEmission = new ProductEmission(request.body);
-  productEmission.calculation = productEmission.numberOfItems * 2;
+  productEmission.calculation = {
+    carbonEmitted:
+      productEmission.numberOfItems *
+      productCarbonData[productEmission.type]["companyAVG"],
+    carbonSaved:
+      productEmission.numberOfItems *
+      (productCarbonData[productEmission.type]["industryAVG"] -
+        productCarbonData[productEmission.type]["companyAVG"]),
+  };
   await ProductEmission.updateOne(
     { _id: productEmission._id },
     productEmission
@@ -1027,6 +1055,99 @@ app.get("/productEmissions", auth, async (request, response) => {
   });
 });
 
+app.post("/buildingEmission", auth, async (request, response) => {
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    console.log(companyId);
+    const buildingEmission = new BuildingEmission(request.body);
+    buildingEmission.fromSheets = false;
+    buildingEmission.companyId = companyId;
+    buildingEmission.calculation =
+      (buildingEmission.warehouseSpace + buildingEmission.buildingSpace) *
+      ((280 / 365) * 13);
+    var id = "";
+    await buildingEmission.save().then((addedEmission) => {
+      id = addedEmission._id;
+    });
+    response.status(201).send({
+      message: "Building Emission added successfully",
+      _id: id,
+    });
+  });
+});
+
+app.put("/buildingEmission", auth, async (request, response) => {
+  const buildingEmission = new BuildingEmission(request.body);
+  buildingEmission.calculation =
+    (buildingEmission.warehouseSpace + buildingEmission.buildingSpace) *
+    ((280 / 365) * 13);
+  await BuildingEmission.updateOne(
+    { _id: buildingEmission._id },
+    buildingEmission
+  );
+  response.status(200).send({
+    message: "Building Emission updated successfully",
+  });
+});
+
+app.delete("/buildingEmission", auth, async (request, response) => {
+  await BuildingEmission.deleteOne({ _id: request.body._id });
+  response.status(200).send({
+    message: "Building Emission deleted successfully",
+  });
+});
+
+app.get("/buildingEmissions", auth, async (request, response) => {
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    await GSBuildingEmission.deleteMany({ companyId: companyId });
+    await GoogleSheets.findOne({ companyId: companyId })
+      .then(async (result) => {
+        const sheetsId = result.sheetsId;
+        await buildingEmissionfromSheets(
+          "Building!B5:D",
+          "All",
+          sheetsId,
+          companyId
+        );
+      })
+      .catch((e) => {});
+    await new Promise((r) => setTimeout(r, 500));
+    var buildingEmissions = [];
+    await BuildingEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const buildingEmission = BuildingEmission(emission);
+          buildingEmissions.push(buildingEmission);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    await GSBuildingEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const buildingEmission = GSBuildingEmission(emission);
+          buildingEmissions.push(buildingEmission);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    response.status(200).send(buildingEmissions);
+  });
+});
+
 app.get("/visualisation", auth, async (request, response) => {
   await User.findOne({ _id: request.user.userId }).then(async (user) => {
     const companyId = user.companyId;
@@ -1059,7 +1180,9 @@ app.get("/visualisation", auth, async (request, response) => {
         November: 0,
         December: 0,
       },
-      Air: {
+    };
+    const travelDistanceResult = {
+      Road: {
         January: 0,
         February: 0,
         March: 0,
@@ -1073,7 +1196,9 @@ app.get("/visualisation", auth, async (request, response) => {
         November: 0,
         December: 0,
       },
-      Sea: {
+    };
+    const employeeCommuteResult = {
+      Road: {
         January: 0,
         February: 0,
         March: 0,
@@ -1087,7 +1212,9 @@ app.get("/visualisation", auth, async (request, response) => {
         November: 0,
         December: 0,
       },
-      Rail: {
+    };
+    const businessCommuteResult = {
+      Road: {
         January: 0,
         February: 0,
         March: 0,
@@ -1117,35 +1244,9 @@ app.get("/visualisation", auth, async (request, response) => {
         November: 0,
         December: 0,
       },
-      Air: {
-        January: 0,
-        February: 0,
-        March: 0,
-        April: 0,
-        May: 0,
-        June: 0,
-        July: 0,
-        August: 0,
-        September: 0,
-        October: 0,
-        November: 0,
-        December: 0,
-      },
-      Sea: {
-        January: 0,
-        February: 0,
-        March: 0,
-        April: 0,
-        May: 0,
-        June: 0,
-        July: 0,
-        August: 0,
-        September: 0,
-        October: 0,
-        November: 0,
-        December: 0,
-      },
-      Rail: {
+    };
+    const electricityResult = {
+      Electricity: {
         January: 0,
         February: 0,
         March: 0,
@@ -1160,7 +1261,7 @@ app.get("/visualisation", auth, async (request, response) => {
         December: 0,
       },
     };
-    const electricityResult = {
+    const electricityUsageResult = {
       Electricity: {
         January: 0,
         February: 0,
@@ -1192,29 +1293,61 @@ app.get("/visualisation", auth, async (request, response) => {
         December: 0,
       },
     };
+    const buildingResult = {
+      All: {
+        January: 0,
+        February: 0,
+        March: 0,
+        April: 0,
+        May: 0,
+        June: 0,
+        July: 0,
+        August: 0,
+        September: 0,
+        October: 0,
+        November: 0,
+        December: 0,
+      },
+    };
+    const productCarbonEmissions = {
+      "Maternity Bra": { emissions: 0, saved: 0 },
+      "Regular Bra": { emissions: 0, saved: 0 },
+      "Panty": { emissions: 0, saved: 0 },
+      "Lounge Long Tee Kind": { emissions: 0, saved: 0 },
+      "Lounge Dress Kind": { emissions: 0, saved: 0 },
+      "Nighty": { emissions: 0, saved: 0 },
+      "Lounge Bottom": { emissions: 0, saved: 0 },
+    };
     const final = {
-      total: 0,
-      scope1: 0,
-      scope2: 0,
-      scope3: 0,
-      totalTravelScope: 0,
-      totalCargoScope: 0,
-      totalElectricityScope: 0,
-      totalFuelScope: 0,
-      totalElectricityUsage: 0,
-      totalDistanceTravelled: 0,
-      totalFuelExpenditure: 0,
+      // total: 0,
+      // scope1: 0,
+      // scope2: 0,
+      // scope3: 0,
+      // totalTravelEmission: 0,
+      // totalCargoEmission: 0,
+      // totalElectricityEmission: 0,
+      // totalFuelEmission: 0,
+      // totalElectricityUsage: 0,
+      // totalDistanceTravelled: 0,
+      // totalFuelExpenditure: 0,
     };
     var total = 0;
     var totalTravel = 0;
     var totalCargo = 0;
     var totalElectricity = 0;
+    var totalBuilding = 0;
+    var totalBuildingSpace = 0;
+    var totalWarehouseSpace = 0;
+    var totalProduct = 0;
     var totalFuel = 0;
     var totalElectricityUsage = 0;
     var totalDistanceTravelled = 0;
+    var totalBusinessCommuteDistance = 0;
+    var totalEmployeeCommuteDistance = 0;
     var totalFuelExpenditure = 0;
+    var totalProductSaved = 0;
 
-    await GSTravelEmission.find({ companyId: companyId })
+    await TravelEmission.find({ companyId: companyId })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -1222,9 +1355,23 @@ app.get("/visualisation", auth, async (request, response) => {
           travelResult[emission.travelBy][
             months[date.getMonth()]
           ] += parseFloat(emission.calculation.co2e);
+          travelDistanceResult[emission.travelBy][
+            months[date.getMonth()]
+          ] += parseFloat(emission.distance);
           total += parseFloat(emission.calculation.co2e);
           totalTravel += parseFloat(emission.calculation.co2e);
           totalDistanceTravelled += parseInt(emission.distance);
+          if (emission.travelType === "Business") {
+            businessCommuteResult[emission.travelBy][
+              months[date.getMonth()]
+            ] += parseFloat(emission.calculation.co2e);
+            totalBusinessCommuteDistance += emission.distance;
+          } else {
+            employeeCommuteResult[emission.travelBy][
+              months[date.getMonth()]
+            ] += parseFloat(emission.calculation.co2e);
+            totalEmployeeCommuteDistance += emission.distance;
+          }
         });
       })
       // catch error if email does not exist
@@ -1235,7 +1382,65 @@ app.get("/visualisation", auth, async (request, response) => {
         });
       });
 
-    final["totalTravelScope"] = totalTravel;
+    await GSTravelEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          travelResult[emission.travelBy][
+            months[date.getMonth()]
+          ] += parseFloat(emission.calculation.co2e);
+          travelDistanceResult[emission.travelBy][
+            months[date.getMonth()]
+          ] += parseFloat(emission.distance);
+          total += parseFloat(emission.calculation.co2e);
+          totalTravel += parseFloat(emission.calculation.co2e);
+          totalDistanceTravelled += parseInt(emission.distance);
+          if (emission.travelType === "Business") {
+            businessCommuteResult[emission.travelBy][
+              months[date.getMonth()]
+            ] += parseFloat(emission.calculation.co2e);
+            totalBusinessCommuteDistance += emission.distance;
+          } else {
+            employeeCommuteResult[emission.travelBy][
+              months[date.getMonth()]
+            ] += parseFloat(emission.calculation.co2e);
+            totalEmployeeCommuteDistance += emission.distance;
+          }
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+
+    final["totalTravelEmission"] = totalTravel;
+    final["totalBusinessCommuteDistance"] = totalBusinessCommuteDistance;
+    final["totalEmployeeCommuteDistance"] = totalEmployeeCommuteDistance;
+
+    await CargoEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          cargoResult[emission.travelBy][months[date.getMonth()]] += parseFloat(
+            emission.calculation.co2e
+          );
+          total += parseFloat(emission.calculation.co2e);
+          totalCargo += parseFloat(emission.calculation.co2e);
+          totalDistanceTravelled += parseInt(emission.distance);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
 
     await GSCargoEmission.find({ companyId: companyId })
       // if travel emissions exists
@@ -1258,10 +1463,10 @@ app.get("/visualisation", auth, async (request, response) => {
         });
       });
 
-    final["totalCargoScope"] = totalCargo;
+    final["totalCargoEmission"] = totalCargo;
     final["totalDistanceTravelled"] = totalDistanceTravelled;
 
-    await GSElectricityEmission.find({ companyId: companyId })
+    await ElectricityEmission.find({ companyId: companyId })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -1269,6 +1474,9 @@ app.get("/visualisation", auth, async (request, response) => {
           electricityResult["Electricity"][
             months[date.getMonth()]
           ] += parseFloat(emission.calculation.co2e);
+          electricityUsageResult["Electricity"][
+            months[date.getMonth()]
+          ] += parseFloat(emission.energy);
           total += parseFloat(emission.calculation.co2e);
           totalElectricity += parseFloat(emission.calculation.co2e);
           totalElectricityUsage += parseInt(emission.energy);
@@ -1282,7 +1490,31 @@ app.get("/visualisation", auth, async (request, response) => {
         });
       });
 
-    final["totalElectricityScope"] = totalElectricity;
+    await GSElectricityEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          electricityResult["Electricity"][
+            months[date.getMonth()]
+          ] += parseFloat(emission.calculation.co2e);
+          electricityUsageResult["Electricity"][
+            months[date.getMonth()]
+          ] += parseFloat(emission.energy);
+          total += parseFloat(emission.calculation.co2e);
+          totalElectricity += parseFloat(emission.calculation.co2e);
+          totalElectricityUsage += parseInt(emission.energy);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+
+    final["totalElectricityEmission"] = totalElectricity;
     final["totalElectricityUsage"] = totalElectricityUsage;
 
     await GSFuelEmission.find({ companyId: companyId })
@@ -1306,12 +1538,105 @@ app.get("/visualisation", auth, async (request, response) => {
         });
       });
 
-    final["totalFuelScope"] = totalFuel;
+    await ProductEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          productCarbonEmissions[emission.type]["emissions"] += emission.calculation.carbonEmitted;
+          productCarbonEmissions[emission.type]["saved"] += emission.calculation.carbonSaved;
+          total += emission.calculation.carbonEmitted;
+          totalProduct += emission.calculation.carbonEmitted;
+          totalProductSaved += emission.calculation.carbonSaved;
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+
+    await GSProductEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          productCarbonEmissions[emission.type]["emissions"] += emission.calculation.carbonEmitted;
+          productCarbonEmissions[emission.type]["saved"] += emission.calculation.carbonSaved;
+          total += emission.calculation.carbonEmitted;
+          totalProduct += emission.calculation.carbonEmitted;
+          totalProductSaved += emission.calculation.carbonSaved;
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    
+      final["Product"] = productCarbonEmissions;
+      final["TotalProductEmissions"] = totalProduct;
+      final["TotalProductSaved"] = totalProductSaved;
+
+      await BuildingEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          buildingResult["All"][
+            months[date.getMonth()]
+          ] += parseFloat(emission.calculation);
+          total += emission.calculation;
+          totalBuilding += emission.calculation;
+          totalBuildingSpace += emission.buildingSpace;
+          totalWarehouseSpace += emission.warehouseSpace;
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+
+    await GSBuildingEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          buildingResult["All"][
+            months[date.getMonth()]
+          ] += parseFloat(emission.calculation);
+          total += emission.calculation;
+          totalBuilding += emission.calculation;
+          totalBuildingSpace += emission.buildingSpace;
+          totalWarehouseSpace += emission.warehouseSpace;
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    
+      final["Building"] = buildingResult;
+    final["TotalBuildingEmissions"] = totalBuilding;
+    final["TotalBuildingSpace"] = totalBuildingSpace;
+    final["TotalWarehouseSpace"] = totalWarehouseSpace;
+
+    final["totalFuelEmission"] = totalFuel;
     final["totalFuelExpenditure"] = totalFuelExpenditure;
 
     final["total"] = total;
-    final["scope2"] = final["totalElectricityScope"];
-    final["scope3"] = final["totalTravelScope"] + final["totalCargoScope"];
+    final["scope1"] = totalProduct + totalBuilding;
+    final["scope2"] = final["totalElectricityEmission"];
+    final["scope3"] =
+      final["totalTravelEmission"] + final["totalCargoEmission"];
 
     final["Travel"] = {};
     Object.keys(travelResult).forEach((key) => {
@@ -1320,6 +1645,36 @@ app.get("/visualisation", auth, async (request, response) => {
         final["Travel"][key].push({
           month: month,
           emission: travelResult[key][month],
+        });
+      });
+    });
+    final["TravelDistance"] = {};
+    Object.keys(travelDistanceResult).forEach((key) => {
+      final["TravelDistance"][key] = [];
+      Object.keys(travelDistanceResult[key]).forEach((month) => {
+        final["TravelDistance"][key].push({
+          month: month,
+          emission: travelDistanceResult[key][month],
+        });
+      });
+    });
+    final["BusinessCommuteEmissions"] = {};
+    Object.keys(businessCommuteResult).forEach((key) => {
+      final["BusinessCommuteEmissions"][key] = [];
+      Object.keys(businessCommuteResult[key]).forEach((month) => {
+        final["BusinessCommuteEmissions"][key].push({
+          month: month,
+          emission: businessCommuteResult[key][month],
+        });
+      });
+    });
+    final["EmployeeCommuteEmissions"] = {};
+    Object.keys(employeeCommuteResult).forEach((key) => {
+      final["EmployeeCommuteEmissions"][key] = [];
+      Object.keys(employeeCommuteResult[key]).forEach((month) => {
+        final["EmployeeCommuteEmissions"][key].push({
+          month: month,
+          emission: employeeCommuteResult[key][month],
         });
       });
     });
@@ -1342,6 +1697,16 @@ app.get("/visualisation", auth, async (request, response) => {
         final["Electricity"][key].push({
           month: month,
           emission: electricityResult[key][month],
+        });
+      });
+    });
+    final["ElectricityUsage"] = {};
+    Object.keys(electricityUsageResult).forEach((key) => {
+      final["ElectricityUsage"][key] = [];
+      Object.keys(electricityUsageResult[key]).forEach((month) => {
+        final["ElectricityUsage"][key].push({
+          month: month,
+          emission: electricityUsageResult[key][month],
         });
       });
     });
@@ -1423,6 +1788,7 @@ async function travelEmissionfromSheets(range, type, id, companyId) {
             passengers: parseInt(value[1]),
             factorType: factorType,
             travelBy: type,
+            travelType: value[4],
             distance: parseInt(value[2]),
             companyId: companyId,
           });
@@ -1713,8 +2079,55 @@ async function productEmissionfromSheets(range, type, id, companyId) {
         type: value[2],
         companyId: companyId,
       });
-      productEmission.calculation = productEmission.numberOfItems * 2;
+      productEmission.calculation = {
+        carbonEmitted:
+          productEmission.numberOfItems *
+          productCarbonData[productEmission.type]["companyAVG"],
+        carbonSaved:
+          productEmission.numberOfItems *
+          (productCarbonData[productEmission.type]["industryAVG"] -
+            productCarbonData[productEmission.type]["companyAVG"]),
+      };
       await productEmission.save();
+    });
+  }
+}
+
+async function buildingEmissionfromSheets(range, type, id, companyId) {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: "credential.json",
+    scopes: "https://www.googleapis.com/auth/spreadsheets",
+  });
+
+  // Create client instance for auth
+  const client = await auth.getClient();
+
+  // Instance of Google Sheets API
+  const googleSheets = google.sheets({ version: "v4", auth: client });
+
+  const spreadsheetId = id;
+
+  const getRows = await googleSheets.spreadsheets.values.get({
+    auth,
+    spreadsheetId,
+    range: range,
+  });
+
+  const allValues = getRows.data.values;
+
+  if (allValues) {
+    allValues.forEach(async (value) => {
+      var emissionDate = Date.parse(value[0]);
+      const buildingEmission = new GSBuildingEmission({
+        date: new Date(emissionDate),
+        buildingSpace: parseInt(value[1]),
+        warehouseSpace: parseInt(value[2]),
+        companyId: companyId,
+      });
+      buildingEmission.calculation =
+        (buildingEmission.warehouseSpace + buildingEmission.buildingSpace) *
+        ((280 / 365) * 13);
+      await buildingEmission.save();
     });
   }
 }
