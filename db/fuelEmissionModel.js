@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const GSFuelEmissionModel = new mongoose.Schema({
+const FuelEmissionModel = new mongoose.Schema({
   volume: {
     type: Number,
     default: 1,
@@ -23,7 +23,7 @@ const GSFuelEmissionModel = new mongoose.Schema({
 
   fromSheets: {
     type: Boolean,
-    default: true,
+    default: false,
   },
 
   companyId: {
@@ -33,5 +33,5 @@ const GSFuelEmissionModel = new mongoose.Schema({
 });
 
 module.exports =
-  mongoose.model.GSFuelEmission ||
-  mongoose.model("GSFuelEmission", GSFuelEmissionModel);
+  mongoose.model.FuelEmission ||
+  mongoose.model("FuelEmission", FuelEmissionModel);
