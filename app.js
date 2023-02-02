@@ -4,7 +4,7 @@ const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
-const cors = require('cors');
+const cors = require("cors");
 
 // require database connection
 const dbConnect = require("./db/dbConnect");
@@ -21,6 +21,8 @@ const ElectricityEmission = require("./db/electricityEmissionModel");
 const GSElectricityEmission = require("./db/gsElectricityEmissionModel");
 const ProductEmission = require("./db/productEmissionModel");
 const GSProductEmission = require("./db/gsProductEmissionModel");
+const DeliveryEmission = require("./db/deliveryEmissionModel");
+const GSDeliveryEmission = require("./db/gsDeliveryEmissionModel");
 const BuildingEmission = require("./db/buildingEmissionModel");
 const GSBuildingEmission = require("./db/gsBuildingEmissionModel");
 const GoogleSheets = require("./db/googleSheetsModel");
@@ -51,7 +53,6 @@ app.use((req, res, next) => {
   );
   next();
 });
-
 
 // body parser configuration
 app.use(bodyParser.json());
@@ -915,13 +916,17 @@ app.get("/electricityEmissions", auth, async (request, response) => {
 });
 
 const productCarbonData = {
-  "Maternity Bra": { companyAVG: 1.305869463, industryAVG: 1.37 },
-  "Regular Bra": { companyAVG: 1.29938542, industryAVG: 1.37 },
-  Panty: { companyAVG: 0.7263671483, industryAVG: 2.4 },
-  "Lounge Long Tee Kind": { companyAVG: 2.777067598, industryAVG: 0 },
-  "Lounge Dress Kind": { companyAVG: 5.987879838, industryAVG: 0 },
-  Nighty: { companyAVG: 7.480894064, industryAVG: 0 },
-  "Lounge Bottom": { companyAVG: 5.97522149, industryAVG: 0 },
+  "Maternity Bra": { companyAVG: 1.305869463, industryAVG: 1.37, weight: 0.5 },
+  "Regular Bra": { companyAVG: 1.29938542, industryAVG: 1.37, weight: 0.5 },
+  Panty: { companyAVG: 0.7263671483, industryAVG: 2.4, weight: 0.5 },
+  "Lounge Long Tee Kind": {
+    companyAVG: 2.777067598,
+    industryAVG: 0,
+    weight: 0.5,
+  },
+  "Lounge Dress Kind": { companyAVG: 5.987879838, industryAVG: 0, weight: 0.5 },
+  Nighty: { companyAVG: 7.480894064, industryAVG: 0, weight: 0.5 },
+  "Lounge Bottom": { companyAVG: 5.97522149, industryAVG: 0, weight: 0.5 },
 };
 
 app.post("/fuelEmission", auth, async (request, response) => {
@@ -1274,6 +1279,180 @@ app.get("/buildingEmissions", auth, async (request, response) => {
   });
 });
 
+destinateCityDistance = {
+  Jaipur: 200,
+  Delhi: 100,
+};
+
+app.post("/deliveryEmission", auth, async (request, response) => {
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    console.log(companyId);
+    ClimatiqFactors.find({ category: "Cargo" })
+      .then(async (climatiqFactors) => {
+        var factors = {};
+        climatiqFactors.forEach((factor) => {
+          factors[factor.type] = factor;
+        });
+        const deliveryEmission = new DeliveryEmission(request.body);
+        deliveryEmission.fromSheets = false;
+        deliveryEmission.companyId = companyId;
+        await axios({
+          method: "POST",
+          url: "https://beta3.api.climatiq.io/estimate",
+          data: JSON.stringify({
+            emission_factor:
+              factors[deliveryEmission.travelBy]["factors"][
+                deliveryEmission.factorType
+              ]["factor"],
+            parameters: {
+              distance: destinateCityDistance[deliveryEmission.destinationCity],
+              distance_unit: "km",
+              weight:
+                productCarbonData[deliveryEmission.type]["weight"] *
+                deliveryEmission.numberOfItems,
+              weight_unit: "kg",
+            },
+          }),
+          headers: {
+            Authorization: "Bearer " + "TABXE4QS5FMMCENSPQJXWRYJ13XD",
+          },
+        })
+          .then(async function (res) {
+            deliveryEmission.calculation = res.data;
+            // save the new emission
+            var id = "";
+            await deliveryEmission.save().then((addedEmission) => {
+              id = addedEmission._id;
+            });
+            response.status(201).send({
+              message: "Delivery Emission added successfully",
+              _id: id,
+            });
+          })
+          .catch(function (error) {
+            console.log(error);
+          });
+      })
+      .catch((e) => {
+        response.status(404).send({
+          message: "Factors not found",
+          e: e.message,
+        });
+      });
+  });
+});
+
+app.put("/deliveryEmission", auth, (request, response) => {
+  ClimatiqFactors.find({ category: "Cargo" })
+    .then(async (climatiqFactors) => {
+      var factors = {};
+      climatiqFactors.forEach((factor) => {
+        factors[factor.type] = factor;
+      });
+      const deliveryEmission = new DeliveryEmission(request.body);
+      await axios({
+        method: "POST",
+        url: "https://beta3.api.climatiq.io/estimate",
+        data: JSON.stringify({
+          emission_factor:
+            factors[deliveryEmission.travelBy]["factors"][
+              deliveryEmission.factorType
+            ]["factor"],
+          parameters: {
+            distance: destinateCityDistance[deliveryEmission.destinationCity],
+            distance_unit: "km",
+            weight:
+              productCarbonData[deliveryEmission.type]["weight"] *
+              deliveryEmission.numberOfItems,
+            weight_unit: "kg",
+          },
+        }),
+        headers: {
+          Authorization: "Bearer " + "TABXE4QS5FMMCENSPQJXWRYJ13XD",
+        },
+      })
+        .then(async function (response) {
+          deliveryEmission.calculation = response.data;
+          await DeliveryEmission.updateOne(
+            { _id: deliveryEmission._id },
+            deliveryEmission
+          );
+        })
+        .catch(function (error) {
+          console.log(error);
+        });
+    })
+    .catch((e) => {
+      response.status(404).send({
+        message: "Factors not found",
+        e,
+      });
+    });
+  response.status(200).send({
+    message: "Delivery Emission updated successfully",
+  });
+});
+
+app.delete("/deliveryEmission", auth, async (request, response) => {
+  await DeliveryEmission.deleteOne({ _id: request.body._id });
+  response.status(200).send({
+    message: "Delivery Emission deleted successfully",
+  });
+});
+
+app.get("/deliveryEmissions", auth, async (request, response) => {
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    await GSDeliveryEmission.deleteMany({ companyId: companyId });
+    await GoogleSheets.findOne({ companyId: companyId })
+      .then(async (result) => {
+        const sheetsId = result.sheetsId;
+        await deliveryEmissionfromSheets(
+          "Delivery!B5:F",
+          "Road",
+          sheetsId,
+          companyId
+        );
+        // await cargoEmissionfromSheets("Cargo!G5:J", "Air", sheetsId, companyId);
+      })
+      .catch((e) => {});
+    await new Promise((r) => setTimeout(r, 500));
+    var deliveryEmissions = [];
+    await DeliveryEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const travelEmission = DeliveryEmission(emission);
+          deliveryEmissions.push(travelEmission);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    await GSDeliveryEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const deliveryEmission = GSDeliveryEmission(emission);
+          deliveryEmissions.push(deliveryEmission);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    response.status(200).send(deliveryEmissions);
+  });
+});
+
 app.get("/visualisation", auth, async (request, response) => {
   await User.findOne({ _id: request.user.userId }).then(async (user) => {
     const companyId = user.companyId;
@@ -1356,6 +1535,38 @@ app.get("/visualisation", auth, async (request, response) => {
       },
     };
     const cargoResult = {
+      Road: {
+        January: 0,
+        February: 0,
+        March: 0,
+        April: 0,
+        May: 0,
+        June: 0,
+        July: 0,
+        August: 0,
+        September: 0,
+        October: 0,
+        November: 0,
+        December: 0,
+      },
+    };
+    const deliveryResult = {
+      Road: {
+        January: 0,
+        February: 0,
+        March: 0,
+        April: 0,
+        May: 0,
+        June: 0,
+        July: 0,
+        August: 0,
+        September: 0,
+        October: 0,
+        November: 0,
+        December: 0,
+      },
+    };
+    const deliveryDistanceResult = {
       Road: {
         January: 0,
         February: 0,
@@ -1754,6 +1965,50 @@ app.get("/visualisation", auth, async (request, response) => {
         });
       });
 
+      await DeliveryEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          deliveryResult[emission.travelBy][
+            months[date.getMonth()]
+          ] += parseFloat(emission.calculation.co2e);
+          deliveryDistanceResult[emission.travelBy][
+            months[date.getMonth()]
+          ] += parseFloat(destinateCityDistance[emission.destinationCity]);
+          total += parseFloat(emission.calculation.co2e);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+
+    await GSDeliveryEmission.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const date = new Date(emission.date);
+          deliveryResult[emission.travelBy][
+            months[date.getMonth()]
+          ] += parseFloat(emission.calculation.co2e);
+          deliveryDistanceResult[emission.travelBy][
+            months[date.getMonth()]
+          ] += parseFloat(destinateCityDistance[emission.destinationCity]);
+          total += parseFloat(emission.calculation.co2e);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+
     final["Building"] = buildingResult;
     final["TotalBuildingEmissions"] = totalBuilding;
     final["TotalBuildingSpace"] = totalBuildingSpace;
@@ -1788,6 +2043,28 @@ app.get("/visualisation", auth, async (request, response) => {
         });
       });
     });
+
+    final["Delivery"] = {};
+    Object.keys(deliveryResult).forEach((key) => {
+      final["Delivery"][key] = [];
+      Object.keys(deliveryResult[key]).forEach((month) => {
+        final["Delivery"][key].push({
+          month: month,
+          emission: deliveryResult[key][month],
+        });
+      });
+    });
+    final["DeliveryDistance"] = {};
+    Object.keys(deliveryDistanceResult).forEach((key) => {
+      final["DeliveryDistance"][key] = [];
+      Object.keys(deliveryDistanceResult[key]).forEach((month) => {
+        final["DeliveryDistance"][key].push({
+          month: month,
+          emission: deliveryDistanceResult[key][month],
+        });
+      });
+    });
+
     final["BusinessCommuteEmissions"] = {};
     Object.keys(businessCommuteResult).forEach((key) => {
       final["BusinessCommuteEmissions"][key] = [];
@@ -2259,6 +2536,87 @@ async function buildingEmissionfromSheets(range, type, id, companyId) {
         ((280 / 365) * 13);
       await buildingEmission.save();
     });
+  }
+}
+
+async function deliveryEmissionfromSheets(range, type, id, companyId) {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: "credential.json",
+    scopes: "https://www.googleapis.com/auth/spreadsheets",
+  });
+
+  // Create client instance for auth
+  const client = await auth.getClient();
+
+  // Instance of Google Sheets API
+  const googleSheets = google.sheets({ version: "v4", auth: client });
+
+  const spreadsheetId = id;
+
+  const getRows = await googleSheets.spreadsheets.values.get({
+    auth,
+    spreadsheetId,
+    range: range,
+  });
+
+  const allValues = getRows.data.values;
+
+  if (allValues) {
+    await ClimatiqFactors.find({ category: "Cargo" })
+      .then(async (climatiqFactors) => {
+        var factors = {};
+        climatiqFactors.forEach((factor) => {
+          factors[factor.type] = factor;
+        });
+        allValues.forEach(async (value) => {
+          var emissionDate = Date.parse(value[0]);
+          const factorType = getFactorTypeFromName(
+            factors,
+            String(value[3]),
+            type
+          );
+          const deliveryEmission = new GSDeliveryEmission({
+            date: new Date(emissionDate),
+            numberOfItems: parseInt(value[1]),
+            factorType: factorType,
+            travelBy: type,
+            type: value[2],
+            companyId: companyId,
+            destinationCity: value[4],
+          });
+          await axios({
+            method: "POST",
+            url: "https://beta3.api.climatiq.io/estimate",
+            data: JSON.stringify({
+              emission_factor:
+                factors[deliveryEmission.travelBy]["factors"][
+                  deliveryEmission.factorType
+                ]["factor"],
+              parameters: {
+                distance: destinateCityDistance[deliveryEmission.destinationCity],
+              distance_unit: "km",
+              weight:
+                productCarbonData[deliveryEmission.type]["weight"] *
+                deliveryEmission.numberOfItems,
+              weight_unit: "kg",
+              },
+            }),
+            headers: {
+              Authorization: "Bearer " + "TABXE4QS5FMMCENSPQJXWRYJ13XD",
+            },
+          })
+            .then(async function (res) {
+              deliveryEmission.calculation = res.data;
+              await deliveryEmission.save();
+            })
+            .catch(function (error) {
+              console.log(error);
+            });
+        });
+      })
+      .catch((e) => {
+        console.log(e);
+      });
   }
 }
 
