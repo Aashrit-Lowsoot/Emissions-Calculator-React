@@ -1647,13 +1647,13 @@ app.get("/visualisation", auth, async (request, response) => {
       },
     };
     const productCarbonEmissions = {
-      "Maternity Bra": { emissions: 0, saved: 0 },
-      "Regular Bra": { emissions: 0, saved: 0 },
-      Panty: { emissions: 0, saved: 0 },
-      "Lounge Long Tee Kind": { emissions: 0, saved: 0 },
-      "Lounge Dress Kind": { emissions: 0, saved: 0 },
-      Nighty: { emissions: 0, saved: 0 },
-      "Lounge Bottom": { emissions: 0, saved: 0 },
+      "Maternity Bra": { emissions: 0, saved: 0, color: '#2085EC' },
+      "Regular Bra": { emissions: 0, saved: 0, color: '#72B4EB' },
+      Panty: { emissions: 0, saved: 0, color: "#8464A0" },
+      "Lounge Long Tee Kind": { emissions: 0, saved: 0, color: '#0A417A' },
+      "Lounge Dress Kind": { emissions: 0, saved: 0, color: '#CEA9BC' },
+      Nighty: { emissions: 0, saved: 0 , color: '#AC2195'},
+      "Lounge Bottom": { emissions: 0, saved: 0, color: '#323232' },
     };
     const final = {
       // total: 0,
@@ -2126,6 +2126,16 @@ app.get("/visualisation", auth, async (request, response) => {
           month: month,
           emission: fuelResult[key][month],
         });
+      });
+    });
+
+    final["ProductGraph"] = [];
+    Object.keys(productCarbonEmissions).forEach((key) => {
+      final["ProductGraph"].push({
+        name: key,
+        saved: productCarbonEmissions[key]['emissions'],
+        emission: productCarbonEmissions[key]['emissions'],
+        color: productCarbonEmissions[key]['color'],
       });
     });
     response.status(200).send(final);
