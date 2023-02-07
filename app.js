@@ -19,6 +19,7 @@ const GSFuelEmission = require("./db/gsFuelEmissionModel");
 const FuelEmission = require("./db/fuelEmissionModel");
 const ElectricityEmission = require("./db/electricityEmissionModel");
 const GSElectricityEmission = require("./db/gsElectricityEmissionModel");
+const TaskModel = require("./db/taskModel");
 const ProductEmission = require("./db/productEmissionModel");
 const GSProductEmission = require("./db/gsProductEmissionModel");
 const DeliveryEmission = require("./db/deliveryEmissionModel");
@@ -178,6 +179,7 @@ app.post("/login", (request, response) => {
           response.status(200).send({
             message: "Login Successful",
             email: user.email,
+            companyId: user.companyId,
             token,
           });
         })
@@ -1280,9 +1282,21 @@ app.get("/buildingEmissions", auth, async (request, response) => {
 });
 
 destinateCityDistance = {
-  Jaipur: 200,
-  Delhi: 100,
+  Jaipur: 653.5,
+  Mumbai: 525.5,
+  Ahmedabad: 0,
+  Kolkata: 2078.2,
+  Pune: 658.5,
+  Hyderabad: 1187,
+  Chennai: 1848.3,
+  Bangalore: 1495.4,
 };
+
+app.get("/citiesList", auth, async (request, response) => {
+  response.status(200).send({
+    cities: Object.keys(destinateCityDistance),
+  });
+});
 
 app.post("/deliveryEmission", auth, async (request, response) => {
   await User.findOne({ _id: request.user.userId }).then(async (user) => {
@@ -1450,6 +1464,145 @@ app.get("/deliveryEmissions", auth, async (request, response) => {
         });
       });
     response.status(200).send(deliveryEmissions);
+  });
+});
+
+emissionTypes = {
+  Travel: TravelEmission,
+  GSTravel: GSTravelEmission,
+  Cargo: CargoEmission,
+  GSCargo: GSCargoEmission,
+  Electricity: ElectricityEmission,
+  GSElectricity: GSElectricityEmission,
+  Fuel: FuelEmission,
+  GSFuel: GSFuelEmission,
+  Building: BuildingEmission,
+  GSBuilding: GSBuildingEmission,
+  Delivery: DeliveryEmission,
+  GSDelivery: GSDeliveryEmission,
+};
+
+const taskNames = [
+  "Travel",
+  "Cargo",
+  "Fuel",
+  "Electricity",
+  "Building",
+  "Delivery",
+];
+
+app.post("/getTotal", auth, async (request, response) => {
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    let total = 0;
+    await emissionTypes[request.body.emissionType]
+      .find({ companyId: companyId })
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          if (request.body.emissionType == "Building") {
+            total += emission.calculation;
+          } else {
+            total += emission.calculation.co2e;
+          }
+        });
+      });
+    await emissionTypes["GS" + request.body.emissionType]
+      .find({ companyId: companyId })
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          if (request.body.emissionType == "Building") {
+            total += emission.calculation;
+          } else {
+            total += emission.calculation.co2e;
+          }
+        });
+      });
+    response.status(200).send({ total: total });
+  });
+});
+
+app.post("/task", auth, async (request, response) => {
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    console.log(companyId);
+    const task = new TaskModel(request.body);
+    task.companyId = companyId;
+    var id = "";
+    await task.save().then((addedTask) => {
+      id = addedTask._id;
+    });
+    response.status(201).send({
+      message: "Task added successfully",
+      _id: id,
+    });
+  });
+});
+
+app.put("/task", auth, async (request, response) => {
+  const task = new TaskModel(request.body);
+  await TaskModel.updateOne({ _id: task._id }, task);
+  response.status(200).send({
+    message: "Task updated successfully",
+  });
+});
+
+app.delete("/task", auth, async (request, response) => {
+  await TaskModel.deleteOne({ _id: request.body._id });
+  response.status(200).send({
+    message: "Task deleted successfully",
+  });
+});
+
+app.get("/task", auth, async (request, response) => {
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    var tasks = [];
+    await TaskModel.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const task = TaskModel(emission);
+          tasks.push(task);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    response.status(200).send(tasks);
+  });
+});
+
+app.post("/taskData", auth, async (request, response) => {
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    var tasks = [];
+    await TaskModel.find({
+      companyId: companyId,
+      emissionType: request.body.emissionType,
+    })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const task = TaskModel(emission);
+          tasks.push({
+            goal: task.carbonSaveGoal,
+            amountSpent: task.amount,
+            emissionTillDate: task.emissionTillDate,
+          });
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    response.status(200).send(tasks);
   });
 });
 
@@ -2148,6 +2301,10 @@ app.get("/visualisation", auth, async (request, response) => {
   });
 });
 
+app.get("/taskNames", auth, async (request, response) => {
+  response.status(200).send({ taskNames: taskNames });
+});
+
 app.post("/summary", auth, async (request, response) => {
   await User.findOne({ _id: request.user.userId }).then(async (user) => {
     const companyId = user.companyId;
@@ -2352,7 +2509,7 @@ app.post("/summary", auth, async (request, response) => {
       Nighty: { emissions: 0, saved: 0, color: "#AC2195" },
       "Lounge Bottom": { emissions: 0, saved: 0, color: "#323232" },
     };
-    const final = {};
+    const final = { companyID: companyId };
     var total = 0;
     var totalTravel = 0;
     var totalCargo = 0;
@@ -2449,8 +2606,10 @@ app.post("/summary", auth, async (request, response) => {
     final["totalBusinessCommuteDistance"] = totalBusinessCommuteDistance;
     final["totalEmployeeCommuteDistance"] = totalEmployeeCommuteDistance;
 
-    await CargoEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await CargoEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -2471,8 +2630,10 @@ app.post("/summary", auth, async (request, response) => {
         });
       });
 
-    await GSCargoEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await GSCargoEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -2496,8 +2657,10 @@ app.post("/summary", auth, async (request, response) => {
     final["totalCargoEmission"] = totalCargo;
     final["totalDistanceTravelled"] = totalDistanceTravelled;
 
-    await ElectricityEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await ElectricityEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -2521,8 +2684,10 @@ app.post("/summary", auth, async (request, response) => {
         });
       });
 
-    await GSElectricityEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await GSElectricityEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -2549,8 +2714,10 @@ app.post("/summary", auth, async (request, response) => {
     final["totalElectricityEmission"] = totalElectricity;
     final["totalElectricityUsage"] = totalElectricityUsage;
 
-    await GSFuelEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await GSFuelEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -2571,8 +2738,10 @@ app.post("/summary", auth, async (request, response) => {
         });
       });
 
-    await ProductEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await ProductEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -2593,8 +2762,10 @@ app.post("/summary", auth, async (request, response) => {
         });
       });
 
-    await GSProductEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await GSProductEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -2619,8 +2790,10 @@ app.post("/summary", auth, async (request, response) => {
     final["TotalProductEmissions"] = totalProduct;
     final["TotalProductSaved"] = totalProductSaved;
 
-    await BuildingEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await BuildingEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -2642,8 +2815,10 @@ app.post("/summary", auth, async (request, response) => {
         });
       });
 
-    await GSBuildingEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await GSBuildingEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -2665,8 +2840,10 @@ app.post("/summary", auth, async (request, response) => {
         });
       });
 
-    await DeliveryEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await DeliveryEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -2688,8 +2865,10 @@ app.post("/summary", auth, async (request, response) => {
         });
       });
 
-    await GSDeliveryEmission.find({ companyId: companyId,
-      date: { $gte: startDate, $lte: endDate }, })
+    await GSDeliveryEmission.find({
+      companyId: companyId,
+      date: { $gte: startDate, $lte: endDate },
+    })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
