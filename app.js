@@ -1839,7 +1839,6 @@ app.get("/visualisation", auth, async (request, response) => {
 
     await TravelEmission.find({
       companyId: companyId,
-      date: { $gte: "2023-01-01", $lte: "2023-02-28" },
     })
       // if travel emissions exists
       .then((emissions) => {
@@ -1877,7 +1876,6 @@ app.get("/visualisation", auth, async (request, response) => {
 
     await GSTravelEmission.find({
       companyId: companyId,
-      date: { $gte: "2022-01-01", $lte: "2022-02-30" },
     })
       // if travel emissions exists
       .then((emissions) => {
