@@ -1800,13 +1800,23 @@ app.get("/visualisation", auth, async (request, response) => {
       },
     };
     const productCarbonEmissions = {
-      "Maternity Bra": { emissions: 0, saved: 0, color: "#2085EC" },
-      "Regular Bra": { emissions: 0, saved: 0, color: "#72B4EB" },
-      Panty: { emissions: 0, saved: 0, color: "#8464A0" },
-      "Lounge Long Tee Kind": { emissions: 0, saved: 0, color: "#0A417A" },
-      "Lounge Dress Kind": { emissions: 0, saved: 0, color: "#CEA9BC" },
-      Nighty: { emissions: 0, saved: 0, color: "#AC2195" },
-      "Lounge Bottom": { emissions: 0, saved: 0, color: "#323232" },
+      "Maternity Bra": { emissions: 0, saved: 0, color: "#2085EC", sales: 0 },
+      "Regular Bra": { emissions: 0, saved: 0, color: "#72B4EB", sales: 0 },
+      Panty: { emissions: 0, saved: 0, color: "#8464A0", sales: 0 },
+      "Lounge Long Tee Kind": {
+        emissions: 0,
+        saved: 0,
+        color: "#0A417A",
+        sales: 0,
+      },
+      "Lounge Dress Kind": {
+        emissions: 0,
+        saved: 0,
+        color: "#CEA9BC",
+        sales: 0,
+      },
+      Nighty: { emissions: 0, saved: 0, color: "#AC2195", sales: 0 },
+      "Lounge Bottom": { emissions: 0, saved: 0, color: "#323232", sales: 0 },
     };
     const final = {
       // total: 0,
@@ -1836,6 +1846,7 @@ app.get("/visualisation", auth, async (request, response) => {
     var totalEmployeeCommuteDistance = 0;
     var totalFuelExpenditure = 0;
     var totalProductSaved = 0;
+    var totalProductSales = 0;
 
     await TravelEmission.find({
       companyId: companyId,
@@ -2032,6 +2043,8 @@ app.get("/visualisation", auth, async (request, response) => {
         });
       });
 
+    total;
+
     await ProductEmission.find({ companyId: companyId })
       // if travel emissions exists
       .then((emissions) => {
@@ -2040,9 +2053,12 @@ app.get("/visualisation", auth, async (request, response) => {
             emission.calculation.carbonEmitted;
           productCarbonEmissions[emission.type]["saved"] +=
             emission.calculation.carbonSaved;
+          productCarbonEmissions[emission.type]["sales"] +=
+            emission.numberOfItems;
           total += emission.calculation.carbonEmitted;
           totalProduct += emission.calculation.carbonEmitted;
           totalProductSaved += emission.calculation.carbonSaved;
+          totalProductSales += emission.numberOfItems;
         });
       })
       // catch error if email does not exist
@@ -2061,9 +2077,12 @@ app.get("/visualisation", auth, async (request, response) => {
             emission.calculation.carbonEmitted;
           productCarbonEmissions[emission.type]["saved"] +=
             emission.calculation.carbonSaved;
+          productCarbonEmissions[emission.type]["sales"] +=
+            emission.numberOfItems;
           total += emission.calculation.carbonEmitted;
           totalProduct += emission.calculation.carbonEmitted;
           totalProductSaved += emission.calculation.carbonSaved;
+          totalProductSales += emission.numberOfItems;
         });
       })
       // catch error if email does not exist
@@ -2077,6 +2096,7 @@ app.get("/visualisation", auth, async (request, response) => {
     final["Product"] = productCarbonEmissions;
     final["TotalProductEmissions"] = totalProduct;
     final["TotalProductSaved"] = totalProductSaved;
+    final["TotalProductSales"] = totalProductSales;
 
     await BuildingEmission.find({ companyId: companyId })
       // if travel emissions exists
@@ -2290,9 +2310,10 @@ app.get("/visualisation", auth, async (request, response) => {
     Object.keys(productCarbonEmissions).forEach((key) => {
       final["ProductGraph"].push({
         name: key,
-        saved: productCarbonEmissions[key]["emissions"],
+        saved: productCarbonEmissions[key]["saved"],
         emission: productCarbonEmissions[key]["emissions"],
         color: productCarbonEmissions[key]["color"],
+        sales: productCarbonEmissions[key]["sales"],
       });
     });
     response.status(200).send(final);
@@ -2499,13 +2520,23 @@ app.post("/summary", auth, async (request, response) => {
       },
     };
     const productCarbonEmissions = {
-      "Maternity Bra": { emissions: 0, saved: 0, color: "#2085EC" },
-      "Regular Bra": { emissions: 0, saved: 0, color: "#72B4EB" },
-      Panty: { emissions: 0, saved: 0, color: "#8464A0" },
-      "Lounge Long Tee Kind": { emissions: 0, saved: 0, color: "#0A417A" },
-      "Lounge Dress Kind": { emissions: 0, saved: 0, color: "#CEA9BC" },
-      Nighty: { emissions: 0, saved: 0, color: "#AC2195" },
-      "Lounge Bottom": { emissions: 0, saved: 0, color: "#323232" },
+      "Maternity Bra": { emissions: 0, saved: 0, color: "#2085EC", sales: 0 },
+      "Regular Bra": { emissions: 0, saved: 0, color: "#72B4EB", sales: 0 },
+      Panty: { emissions: 0, saved: 0, color: "#8464A0", sales: 0 },
+      "Lounge Long Tee Kind": {
+        emissions: 0,
+        saved: 0,
+        color: "#0A417A",
+        sales: 0,
+      },
+      "Lounge Dress Kind": {
+        emissions: 0,
+        saved: 0,
+        color: "#CEA9BC",
+        sales: 0,
+      },
+      Nighty: { emissions: 0, saved: 0, color: "#AC2195", sales: 0 },
+      "Lounge Bottom": { emissions: 0, saved: 0, color: "#323232", sales: 0 },
     };
     const final = { companyID: companyId };
     var total = 0;
@@ -2523,6 +2554,7 @@ app.post("/summary", auth, async (request, response) => {
     var totalEmployeeCommuteDistance = 0;
     var totalFuelExpenditure = 0;
     var totalProductSaved = 0;
+    var totalProductSales = 0;
 
     await TravelEmission.find({
       companyId: companyId,
@@ -2747,9 +2779,12 @@ app.post("/summary", auth, async (request, response) => {
             emission.calculation.carbonEmitted;
           productCarbonEmissions[emission.type]["saved"] +=
             emission.calculation.carbonSaved;
+          productCarbonEmissions[emission.type]["sales"] +=
+            emission.numberOfItems;
           total += emission.calculation.carbonEmitted;
           totalProduct += emission.calculation.carbonEmitted;
           totalProductSaved += emission.calculation.carbonSaved;
+          totalProductSales += emission.numberOfItems;
         });
       })
       // catch error if email does not exist
@@ -2771,9 +2806,12 @@ app.post("/summary", auth, async (request, response) => {
             emission.calculation.carbonEmitted;
           productCarbonEmissions[emission.type]["saved"] +=
             emission.calculation.carbonSaved;
+          productCarbonEmissions[emission.type]["sales"] +=
+            emission.numberOfItems;
           total += emission.calculation.carbonEmitted;
           totalProduct += emission.calculation.carbonEmitted;
           totalProductSaved += emission.calculation.carbonSaved;
+          totalProductSales += emission.numberOfItems;
         });
       })
       // catch error if email does not exist
@@ -2787,6 +2825,7 @@ app.post("/summary", auth, async (request, response) => {
     final["Product"] = productCarbonEmissions;
     final["TotalProductEmissions"] = totalProduct;
     final["TotalProductSaved"] = totalProductSaved;
+    final["TotalProductSales"] = totalProductSales;
 
     await BuildingEmission.find({
       companyId: companyId,
@@ -3012,9 +3051,10 @@ app.post("/summary", auth, async (request, response) => {
     Object.keys(productCarbonEmissions).forEach((key) => {
       final["ProductGraph"].push({
         name: key,
-        saved: productCarbonEmissions[key]["emissions"],
+        saved: productCarbonEmissions[key]["saved"],
         emission: productCarbonEmissions[key]["emissions"],
         color: productCarbonEmissions[key]["color"],
+        sales: productCarbonEmissions[key]["sales"],
       });
     });
     response.status(200).send(final);
