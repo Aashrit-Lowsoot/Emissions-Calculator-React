@@ -2539,7 +2539,7 @@ app.post("/summary", auth, async (request, response) => {
       },
       Nighty: { emissions: 0, saved: 0, color: "#AC2195", sales: 0 },
       "Lounge Bottom": { emissions: 0, saved: 0, color: "#323232", sales: 0 },
-      "Other": { emissions: 0, saved: 0, color: "#808080", sales: 0 },
+      "Other": { emissions: 0, saved: 0, color: "#808080", sales: 0 }
     };
     const final = { companyID: companyId };
     var total = 0;
