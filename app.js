@@ -929,6 +929,7 @@ const productCarbonData = {
   "Lounge Dress Kind": { companyAVG: 5.987879838, industryAVG: 0, weight: 0.5 },
   Nighty: { companyAVG: 7.480894064, industryAVG: 0, weight: 0.5 },
   "Lounge Bottom": { companyAVG: 5.97522149, industryAVG: 0, weight: 0.5 },
+  "Other": { companyAVG: 0, industryAVG: 0, weight: 0.5 },
 };
 
 app.post("/fuelEmission", auth, async (request, response) => {
@@ -1817,6 +1818,7 @@ app.get("/visualisation", auth, async (request, response) => {
       },
       Nighty: { emissions: 0, saved: 0, color: "#AC2195", sales: 0 },
       "Lounge Bottom": { emissions: 0, saved: 0, color: "#323232", sales: 0 },
+      "Other": { emissions: 0, saved: 0, color: "#808080", sales: 0 },
     };
     const final = {
       // total: 0,
@@ -2537,6 +2539,7 @@ app.post("/summary", auth, async (request, response) => {
       },
       Nighty: { emissions: 0, saved: 0, color: "#AC2195", sales: 0 },
       "Lounge Bottom": { emissions: 0, saved: 0, color: "#323232", sales: 0 },
+      "Other": { emissions: 0, saved: 0, color: "#808080", sales: 0 },
     };
     const final = { companyID: companyId };
     var total = 0;
