@@ -20,6 +20,7 @@ const FuelEmission = require("./db/fuelEmissionModel");
 const ElectricityEmission = require("./db/electricityEmissionModel");
 const GSElectricityEmission = require("./db/gsElectricityEmissionModel");
 const TaskModel = require("./db/taskModel");
+const GSTaskModel = require("./db/gsTaskModel");
 const ProductEmission = require("./db/productEmissionModel");
 const GSProductEmission = require("./db/gsProductEmissionModel");
 const DeliveryEmission = require("./db/deliveryEmissionModel");
@@ -929,7 +930,9 @@ const productCarbonData = {
   "Lounge Dress Kind": { companyAVG: 5.987879838, industryAVG: 0, weight: 0.5 },
   Nighty: { companyAVG: 7.480894064, industryAVG: 0, weight: 0.5 },
   "Lounge Bottom": { companyAVG: 5.97522149, industryAVG: 0, weight: 0.5 },
-  "Other": { companyAVG: 0, industryAVG: 0, weight: 0.5 },
+  Other: { companyAVG: 0, industryAVG: 0, weight: 0.5 },
+  "Lip Gloss": { companyAVG: 0, industryAVG: 0, weight: 0.04 },
+  "Liquid Eye Shadow": { companyAVG: 0, industryAVG: 0, weight: 0.04 },
 };
 
 app.post("/fuelEmission", auth, async (request, response) => {
@@ -1282,20 +1285,35 @@ app.get("/buildingEmissions", auth, async (request, response) => {
   });
 });
 
-destinateCityDistance = {
-  Jaipur: 653.5,
-  Mumbai: 525.5,
-  Ahmedabad: 0,
-  Kolkata: 2078.2,
-  Pune: 658.5,
-  Hyderabad: 1187,
-  Chennai: 1848.3,
-  Bangalore: 1495.4,
+destinationCityDistance = {
+  1: {
+    Jaipur: 653.5,
+    Mumbai: 525.5,
+    Ahmedabad: 0,
+    Kolkata: 2078.2,
+    Pune: 658.5,
+    Hyderabad: 1187,
+    Chennai: 1848.3,
+    Bangalore: 1495.4,
+  },
+  2: {
+    Jaipur: 1582.8,
+    Mumbai: 1897.2,
+    Ahmedabad: 2074.8,
+    Kolkata: 0,
+    Pune: 1851.6,
+    Hyderabad: 1487.9,
+    Chennai: 1664.8,
+    Bangalore: 1873.2,
+  },
 };
 
 app.get("/citiesList", auth, async (request, response) => {
-  response.status(200).send({
-    cities: Object.keys(destinateCityDistance),
+  await User.findOne({ _id: request.user.userId }).then(async (user) => {
+    const companyId = user.companyId;
+    response.status(200).send({
+      cities: Object.keys(destinationCityDistance[companyId]),
+    });
   });
 });
 
@@ -1321,7 +1339,10 @@ app.post("/deliveryEmission", auth, async (request, response) => {
                 deliveryEmission.factorType
               ]["factor"],
             parameters: {
-              distance: destinateCityDistance[deliveryEmission.destinationCity],
+              distance:
+                destinationCityDistance[companyId][
+                  deliveryEmission.destinationCity
+                ],
               distance_unit: "km",
               weight:
                 productCarbonData[deliveryEmission.type]["weight"] *
@@ -1375,7 +1396,10 @@ app.put("/deliveryEmission", auth, (request, response) => {
               deliveryEmission.factorType
             ]["factor"],
           parameters: {
-            distance: destinateCityDistance[deliveryEmission.destinationCity],
+            distance:
+              destinationCityDistance[companyId][
+                deliveryEmission.destinationCity
+              ],
             distance_unit: "km",
             weight:
               productCarbonData[deliveryEmission.type]["weight"] *
@@ -1557,8 +1581,36 @@ app.delete("/task", auth, async (request, response) => {
 app.get("/task", auth, async (request, response) => {
   await User.findOne({ _id: request.user.userId }).then(async (user) => {
     const companyId = user.companyId;
+    await GSTaskModel.deleteMany({ companyId: companyId });
+    await GoogleSheets.findOne({ companyId: companyId })
+      .then(async (result) => {
+        const sheetsId = result.sheetsId;
+        await carbonNeutralfromSheets(
+          "Carbon_Neutral!B5:F",
+          "All",
+          sheetsId,
+          companyId
+        );
+      })
+      .catch((e) => {});
+    await new Promise((r) => setTimeout(r, 500));
     var tasks = [];
     await TaskModel.find({ companyId: companyId })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const task = TaskModel(emission);
+          tasks.push(task);
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    await GSTaskModel.find({ companyId: companyId })
       // if travel emissions exists
       .then((emissions) => {
         emissions.forEach((emission) => {
@@ -1582,6 +1634,28 @@ app.post("/taskData", auth, async (request, response) => {
     const companyId = user.companyId;
     var tasks = [];
     await TaskModel.find({
+      companyId: companyId,
+      emissionType: request.body.emissionType,
+    })
+      // if travel emissions exists
+      .then((emissions) => {
+        emissions.forEach((emission) => {
+          const task = TaskModel(emission);
+          tasks.push({
+            goal: task.carbonSaveGoal,
+            amountSpent: task.amount,
+            emissionTillDate: task.emissionTillDate,
+          });
+        });
+      })
+      // catch error if email does not exist
+      .catch((e) => {
+        response.status(404).send({
+          message: "Data not found",
+          e,
+        });
+      });
+    await GSTaskModel.find({
       companyId: companyId,
       emissionType: request.body.emissionType,
     })
@@ -1818,7 +1892,7 @@ app.get("/visualisation", auth, async (request, response) => {
       },
       Nighty: { emissions: 0, saved: 0, color: "#AC2195", sales: 0 },
       "Lounge Bottom": { emissions: 0, saved: 0, color: "#323232", sales: 0 },
-      "Other": { emissions: 0, saved: 0, color: "#808080", sales: 0 },
+      Other: { emissions: 0, saved: 0, color: "#808080", sales: 0 },
     };
     const final = {
       // total: 0,
@@ -1849,6 +1923,16 @@ app.get("/visualisation", auth, async (request, response) => {
     var totalFuelExpenditure = 0;
     var totalProductSaved = 0;
     var totalProductSales = 0;
+
+    await GoogleSheets.findOne({ companyId: companyId })
+      .then(async (result) => {
+        const sheetsId = result.sheetsId;
+        totalProductSales =  await totalSalesfromSheets(
+          "Total_Sales!B5:C",
+          sheetsId
+        );
+      })
+      .catch((e) => {});
 
     await TravelEmission.find({
       companyId: companyId,
@@ -2060,7 +2144,7 @@ app.get("/visualisation", auth, async (request, response) => {
           total += emission.calculation.carbonEmitted;
           totalProduct += emission.calculation.carbonEmitted;
           totalProductSaved += emission.calculation.carbonSaved;
-          totalProductSales += emission.numberOfItems;
+          // totalProductSales += emission.numberOfItems;
         });
       })
       // catch error if email does not exist
@@ -2084,7 +2168,7 @@ app.get("/visualisation", auth, async (request, response) => {
           total += emission.calculation.carbonEmitted;
           totalProduct += emission.calculation.carbonEmitted;
           totalProductSaved += emission.calculation.carbonSaved;
-          totalProductSales += emission.numberOfItems;
+          // totalProductSales += emission.numberOfItems;
         });
       })
       // catch error if email does not exist
@@ -2154,7 +2238,9 @@ app.get("/visualisation", auth, async (request, response) => {
           ] += parseFloat(emission.calculation.co2e);
           deliveryDistanceResult[emission.travelBy][
             months[date.getMonth()]
-          ] += parseFloat(destinateCityDistance[emission.destinationCity]);
+          ] += parseFloat(
+            destinationCityDistance[companyId][emission.destinationCity]
+          );
           total += parseFloat(emission.calculation.co2e);
         });
       })
@@ -2176,7 +2262,9 @@ app.get("/visualisation", auth, async (request, response) => {
           ] += parseFloat(emission.calculation.co2e);
           deliveryDistanceResult[emission.travelBy][
             months[date.getMonth()]
-          ] += parseFloat(destinateCityDistance[emission.destinationCity]);
+          ] += parseFloat(
+            destinationCityDistance[companyId][emission.destinationCity]
+          );
           total += parseFloat(emission.calculation.co2e);
         });
       })
@@ -2539,7 +2627,7 @@ app.post("/summary", auth, async (request, response) => {
       },
       Nighty: { emissions: 0, saved: 0, color: "#AC2195", sales: 0 },
       "Lounge Bottom": { emissions: 0, saved: 0, color: "#323232", sales: 0 },
-      "Other": { emissions: 0, saved: 0, color: "#808080", sales: 0 }
+      Other: { emissions: 0, saved: 0, color: "#808080", sales: 0 },
     };
     const final = { companyID: companyId };
     var total = 0;
@@ -2558,6 +2646,16 @@ app.post("/summary", auth, async (request, response) => {
     var totalFuelExpenditure = 0;
     var totalProductSaved = 0;
     var totalProductSales = 0;
+
+    await GoogleSheets.findOne({ companyId: companyId })
+      .then(async (result) => {
+        const sheetsId = result.sheetsId;
+        totalProductSales =  await totalSalesfromSheets(
+          "Total_Sales!B5:C",
+          sheetsId
+        );
+      })
+      .catch((e) => {});
 
     await TravelEmission.find({
       companyId: companyId,
@@ -2787,7 +2885,7 @@ app.post("/summary", auth, async (request, response) => {
           total += emission.calculation.carbonEmitted;
           totalProduct += emission.calculation.carbonEmitted;
           totalProductSaved += emission.calculation.carbonSaved;
-          totalProductSales += emission.numberOfItems;
+          // totalProductSales += emission.numberOfItems;
         });
       })
       // catch error if email does not exist
@@ -2814,7 +2912,7 @@ app.post("/summary", auth, async (request, response) => {
           total += emission.calculation.carbonEmitted;
           totalProduct += emission.calculation.carbonEmitted;
           totalProductSaved += emission.calculation.carbonSaved;
-          totalProductSales += emission.numberOfItems;
+          // totalProductSales += emission.numberOfItems;
         });
       })
       // catch error if email does not exist
@@ -2893,7 +2991,9 @@ app.post("/summary", auth, async (request, response) => {
           ] += parseFloat(emission.calculation.co2e);
           deliveryDistanceResult[emission.travelBy][
             months[date.getMonth()]
-          ] += parseFloat(destinateCityDistance[emission.destinationCity]);
+          ] += parseFloat(
+            destinationCityDistance[companyId][emission.destinationCity]
+          );
           total += parseFloat(emission.calculation.co2e);
         });
       })
@@ -2918,7 +3018,9 @@ app.post("/summary", auth, async (request, response) => {
           ] += parseFloat(emission.calculation.co2e);
           deliveryDistanceResult[emission.travelBy][
             months[date.getMonth()]
-          ] += parseFloat(destinateCityDistance[emission.destinationCity]);
+          ] += parseFloat(
+            destinationCityDistance[companyId][emission.destinationCity]
+          );
           total += parseFloat(emission.calculation.co2e);
         });
       })
@@ -3526,7 +3628,9 @@ async function deliveryEmissionfromSheets(range, type, id, companyId) {
                 ]["factor"],
               parameters: {
                 distance:
-                  destinateCityDistance[deliveryEmission.destinationCity],
+                  destinationCityDistance[companyId][
+                    deliveryEmission.destinationCity
+                  ],
                 distance_unit: "km",
                 weight:
                   productCarbonData[deliveryEmission.type]["weight"] *
@@ -3551,6 +3655,100 @@ async function deliveryEmissionfromSheets(range, type, id, companyId) {
         console.log(e);
       });
   }
+}
+
+async function carbonNeutralfromSheets(range, type, id, companyId) {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: "credential.json",
+    scopes: "https://www.googleapis.com/auth/spreadsheets",
+  });
+
+  // Create client instance for auth
+  const client = await auth.getClient();
+
+  // Instance of Google Sheets API
+  const googleSheets = google.sheets({ version: "v4", auth: client });
+
+  const spreadsheetId = id;
+
+  const getRows = await googleSheets.spreadsheets.values.get({
+    auth,
+    spreadsheetId,
+    range: range,
+  });
+
+  const allValues = getRows.data.values;
+
+  if (allValues) {
+    allValues.forEach(async (value) => {
+      let total = 0;
+      await emissionTypes[value[4]]
+        .find({ companyId: companyId })
+        .then((emissions) => {
+          emissions.forEach((emission) => {
+            if (value[4] == "Building") {
+              total += emission.calculation;
+            } else {
+              total += emission.calculation.co2e;
+            }
+          });
+        });
+      await emissionTypes["GS" + value[4]]
+        .find({ companyId: companyId })
+        .then((emissions) => {
+          emissions.forEach((emission) => {
+            if (value[4] == "Building") {
+              total += emission.calculation;
+            } else {
+              total += emission.calculation.co2e;
+            }
+          });
+        });
+      var startDate = Date.parse(value[0]);
+      var endDate = Date.parse(value[1]);
+      const task = new GSTaskModel({
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        amount: parseInt(value[2]),
+        carbonSaveGoal: parseInt(value[3]),
+        emissionType: value[4],
+        companyId: companyId,
+        emissionTillDate: total,
+      });
+      await task.save();
+    });
+  }
+}
+
+async function totalSalesfromSheets(range, id) {
+  const auth = new google.auth.GoogleAuth({
+    keyFile: "credential.json",
+    scopes: "https://www.googleapis.com/auth/spreadsheets",
+  });
+
+  // Create client instance for auth
+  const client = await auth.getClient();
+
+  // Instance of Google Sheets API
+  const googleSheets = google.sheets({ version: "v4", auth: client });
+
+  const spreadsheetId = id;
+
+  const getRows = await googleSheets.spreadsheets.values.get({
+    auth,
+    spreadsheetId,
+    range: range,
+  });
+
+  const allValues = getRows.data.values;
+  let total = 0;
+
+  if (allValues) {
+    allValues.forEach(async (value) => {
+      total += parseInt(value[1]);
+    });
+  }
+  return total;
 }
 
 function getFactorTypeFromName(factors, value, type) {
